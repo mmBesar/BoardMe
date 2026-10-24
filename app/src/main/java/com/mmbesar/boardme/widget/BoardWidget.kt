@@ -1,12 +1,14 @@
 package com.mmbesar.boardme.widget
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.LocalContext
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.actionStartActivity
@@ -54,12 +56,14 @@ class BoardWidget : GlanceAppWidget() {
 
 @Composable
 private fun WidgetContent(data: WidgetData?, emptyText: String) {
+    // Tapping the widget opens the app (this Glance version needs an explicit Intent).
+    val openApp = actionStartActivity(Intent(LocalContext.current, MainActivity::class.java))
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(GlanceTheme.colors.widgetBackground)
             .padding(10.dp)
-            .clickable(actionStartActivity<MainActivity>()),
+            .clickable(openApp),
     ) {
         if (data == null) {
             Text(
