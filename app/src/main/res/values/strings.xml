@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every piece of text the app shows. To add a language, copy this file to values-xx/strings.xml and translate. -->
+<resources>
+    <string name="app_name">BoardMe</string>
+
+    <!-- General buttons -->
+    <string name="action_cancel">Cancel</string>
+    <string name="action_ok">OK</string>
+    <string name="action_save">Save</string>
+    <string name="action_create">Create</string>
+    <string name="action_clear">Clear</string>
+    <string name="action_back">Back</string>
+    <string name="action_pick_date">Pick date</string>
+    <string name="action_connect">Test and connect</string>
+    <string name="action_use_locally">Use locally instead</string>
+
+    <!-- First-start screen -->
+    <string name="setup_title">Welcome to BoardMe</string>
+    <string name="setup_intro">Connect to your own Kanboard server. Both http:// and https:// addresses work, including servers with a self-signed certificate.</string>
+    <string name="setup_local_intro">No server? BoardMe also works on this phone only, with nothing sent anywhere.</string>
+    <string name="setup_http_notice">This address is not encrypted. Anyone on the network could read your token and tasks.</string>
+    <string name="field_address">Server address</string>
+    <string name="field_address_hint">https://kanboard.example.com</string>
+    <string name="field_username">Username</string>
+    <string name="field_token">Personal access token</string>
+
+    <!-- Plain HTTP warning -->
+    <string name="http_title">Connection is not encrypted</string>
+    <string name="http_message">You are about to connect with plain http://. Your username, token and all task data travel unprotected. This is acceptable on a trusted home network, but not over the internet or public Wi-Fi.</string>
+    <string name="http_continue">Connect anyway</string>
+
+    <!-- Self-signed certificate dialog -->
+    <string name="cert_title">Trust this certificate?</string>
+    <string name="cert_intro">The server uses a certificate that Android does not recognise. If you trust it, BoardMe will only ever connect to a server presenting exactly this certificate.</string>
+    <string name="cert_self_signed">This certificate is self-signed.</string>
+    <string name="cert_subject">Issued to: %s</string>
+    <string name="cert_issuer">Issued by: %s</string>
+    <string name="cert_valid">Valid from %1$s to %2$s</string>
+    <string name="cert_fingerprint">SHA-256 fingerprint</string>
+    <string name="cert_advice">Compare this fingerprint with the one shown by your server (for example with: openssl x509 -noout -fingerprint -sha256). Only continue if they match.</string>
+    <string name="cert_trust">Trust this certificate</string>
+
+    <!-- Board screen -->
+    <string name="menu_projects">Projects</string>
+    <string name="menu_more">More</string>
+    <string name="menu_closed_tasks">Closed tasks</string>
+    <string name="menu_export_backup">Export backup</string>
+    <string name="menu_export_snapshot">Export snapshot</string>
+    <string name="menu_import_backup">Import backup</string>
+    <string name="menu_archive_project">Archive project</string>
+    <string name="menu_connection">Connection and about</string>
+    <string name="menu_switch_mode">Switch mode</string>
+    <string name="board_no_projects">There is no project yet.</string>
+    <string name="board_no_columns">This project has no columns.</string>
+    <string name="board_empty_column">No tasks in this column.</string>
+    <string name="project_new">New project</string>
+    <string name="field_project_name">Project name</string>
+    <string name="starter_project_name">My project</string>
+
+    <!-- Tasks -->
+    <string name="task_new">New task</string>
+    <string name="task_edit">Edit task</string>
+    <string name="task_close">Close task</string>
+    <string name="task_move_left">Move to previous column</string>
+    <string name="task_move_right">Move to next column</string>
+    <string name="task_move_up">Move up</string>
+    <string name="task_move_down">Move down</string>
+    <string name="field_title">Title</string>
+    <string name="field_description">Description</string>
+    <string name="due_on">Due: %s</string>
+    <string name="no_due_date">No due date</string>
+
+    <!-- Closed tasks -->
+    <string name="closed_empty">No closed tasks.</string>
+    <string name="closed_reopen">Reopen</string>
+    <string name="closed_delete">Delete</string>
+    <string name="closed_delete_title">Delete task?</string>
+    <string name="closed_delete_message">\"%s\" will be deleted permanently.</string>
+
+    <!-- Archive / switch / import confirmations -->
+    <string name="archive_title">Archive this project?</string>
+    <string name="archive_message_local">The project is hidden. Its tasks stay in the local database and in backups.</string>
+    <string name="archive_message_server">The project is disabled on the Kanboard server. Nothing is deleted.</string>
+    <string name="switch_title">Switch mode?</string>
+    <string name="switch_message_local">All local projects and tasks on this phone will be erased. Export a backup first if you want to keep them.</string>
+    <string name="switch_message_server">The saved login and the cached data on this phone will be erased. Nothing changes on the server.</string>
+    <string name="switch_confirm">Erase and switch</string>
+    <string name="import_title">Import backup?</string>
+    <string name="import_message">This replaces ALL local projects and tasks with the content of the file.</string>
+    <string name="import_confirm">Replace everything</string>
+    <string name="message_exported">File saved.</string>
+    <string name="message_imported">Backup restored.</string>
+
+    <!-- Connection / about dialog -->
+    <string name="about_title">Connection and about</string>
+    <string name="about_local">Local-only mode: everything stays on this phone.</string>
+    <string name="about_server">Server: %s</string>
+    <string name="about_user">User: %s</string>
+    <string name="about_security_https">Encrypted with a certificate Android trusts.</string>
+    <string name="about_security_pinned">Encrypted. Only this self-signed certificate is trusted:</string>
+    <string name="about_security_http">Not encrypted (http://). Use only on a network you trust.</string>
+    <string name="about_independent">BoardMe is an independent open-source app. It is not affiliated with or endorsed by the Kanboard project.</string>
+
+    <!-- Errors and messages -->
+    <string name="error_bad_address">That does not look like a valid server address.</string>
+    <string name="error_missing_login">Enter your username and personal access token.</string>
+    <string name="error_network">Cannot reach the server. Check the address and your connection. Saved data is still shown.</string>
+    <string name="error_certificate">The server certificate is not trusted.</string>
+    <string name="error_certificate_changed">The server certificate is not the one you trusted. If it was renewed on purpose, switch mode and connect again to trust the new one.</string>
+    <string name="error_unauthorized">Wrong username or token.</string>
+    <string name="error_forbidden">This account is not allowed to do that.</string>
+    <string name="error_rejected">The server refused the change.</string>
+    <string name="error_server">The server reported a problem: %s</string>
+    <string name="error_bad_response">The server did not answer like Kanboard. Check the address.</string>
+    <string name="error_not_configured">No server is set up.</string>
+    <string name="error_unexpected">Something went wrong.</string>
+    <string name="error_file_write">Could not write the file.</string>
+    <string name="error_file_read">Could not read the file.</string>
+    <string name="error_file_too_big">That file is too large to be a BoardMe backup.</string>
+
+    <!-- Home-screen widget -->
+    <string name="widget_label">BoardMe board</string>
+    <string name="widget_description">Shows the open tasks of one project.</string>
+    <string name="widget_not_configured">Open BoardMe and set up a project first.</string>
+    <string name="widget_config_title">Choose a project</string>
+    <string name="widget_config_no_setup">Open BoardMe first and connect to a server or choose local mode.</string>
+    <string name="widget_config_no_projects">There are no projects yet.</string>
+</resources>

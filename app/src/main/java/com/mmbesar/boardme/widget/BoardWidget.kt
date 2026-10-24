@@ -1,0 +1,95 @@
+package com.mmbesar.boardme.widget
+
+import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.glance.GlanceId
+import androidx.glance.GlanceModifier
+import androidx.glance.GlanceTheme
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
+import androidx.glance.appwidget.provideContent
+import androidx.glance.background
+import androidx.glance.action.clickable
+import androidx.glance.layout.Column
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
+import androidx.glance.layout.padding
+import androidx.glance.text.FontWeight
+import androidx.glance.text.Text
+import androidx.glance.text.TextStyle
+import androidx.glance.material3.ColorProviders
+import com.mmbesar.boardme.BoardMeApplication
+import com.mmbesar.boardme.MainActivity
+import com.mmbesar.boardme.R
+import com.mmbesar.boardme.data.WidgetData
+import com.mmbesar.boardme.ui.DarkColors
+import com.mmbesar.boardme.ui.LightColors
+
+/**
+ * The home-screen widget: shows the open tasks of one project, grouped by column.
+ * It only reads the on-phone cache (fast, works offline); [RefreshWorker]
+ * keeps that cache fresh. Tapping the widget opens BoardMe.
+ */
+class BoardWidget : GlanceAppWidget() {
+
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val app = context.applicationContext as BoardMeApplication
+        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
+        val projectId = WidgetPrefs.projectFor(context, appWidgetId)
+        val data = projectId?.let { app.repository.widgetSnapshot(it) }
+        val emptyText = context.getString(R.string.widget_not_configured)
+
+        provideContent {
+            GlanceTheme(colors = ColorProviders(light = LightColors, dark = DarkColors)) {
+                WidgetContent(data, emptyText)
+            }
+        }
+    }
+}
+
+@Composable
+private fun WidgetContent(data: WidgetData?, emptyText: String) {
+    Column(
+        modifier = GlanceModifier
+            .fillMaxSize()
+            .background(GlanceTheme.colors.widgetBackground)
+            .padding(10.dp)
+            .clickable(actionStartActivity<MainActivity>()),
+    ) {
+        if (data == null) {
+            Text(
+                text = emptyText,
+                style = TextStyle(color = GlanceTheme.colors.onSurface, fontSize = 14.sp),
+            )
+        } else {
+            Text(
+                text = data.projectName,
+                modifier = GlanceModifier.fillMaxWidth().padding(bottom = 6.dp),
+                style = TextStyle(
+                    color = GlanceTheme.colors.primary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+            )
+            LazyColumn {
+                items(data.rows) { row ->
+                    Text(
+                        text = if (row.isHeader) row.text else "• ${row.text}",
+                        modifier = GlanceModifier.fillMaxWidth().padding(vertical = 2.dp),
+                        style = TextStyle(
+                            color = if (row.isHeader) GlanceTheme.colors.secondary
+                            else GlanceTheme.colors.onSurface,
+                            fontSize = if (row.isHeader) 13.sp else 14.sp,
+                            fontWeight = if (row.isHeader) FontWeight.Bold else FontWeight.Normal,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
