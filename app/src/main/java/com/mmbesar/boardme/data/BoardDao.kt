@@ -32,6 +32,19 @@ abstract class BoardDao {
     @Query("SELECT * FROM tasks WHERE projectId = :projectId AND isActive = :open ORDER BY swimlaneId, position, id")
     abstract fun observeTasks(projectId: Long, open: Boolean): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM subtasks WHERE taskId = :taskId ORDER BY position, id")
+    abstract fun observeSubtasks(taskId: Long): Flow<List<SubtaskEntity>>
+
+    @Query("SELECT * FROM comments WHERE taskId = :taskId ORDER BY created, id")
+    abstract fun observeComments(taskId: Long): Flow<List<CommentEntity>>
+
+    @Query(
+        "SELECT taskId, COUNT(*) AS total, " +
+            "SUM(CASE WHEN status = 2 THEN 1 ELSE 0 END) AS done " +
+            "FROM subtasks GROUP BY taskId",
+    )
+    abstract fun observeSubtaskCounts(): Flow<List<SubtaskCount>>
+
     @Query("SELECT COUNT(*) FROM pending_ops")
     abstract fun observePendingCount(): Flow<Int>
 
@@ -177,9 +190,76 @@ abstract class BoardDao {
 
     // ---- Several changes at once (all or nothing) --------------------------
 
+    // ---- Subtasks and comments ----
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun upsertSubtasks(subtasks: List<SubtaskEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun upsertComments(comments: List<CommentEntity>)
+
+    @Query("DELETE FROM subtasks WHERE taskId = :taskId")
+    abstract suspend fun deleteSubtasksOf(taskId: Long)
+
+    @Query("DELETE FROM comments WHERE taskId = :taskId")
+    abstract suspend fun deleteCommentsOf(taskId: Long)
+
+    @Query("DELETE FROM subtasks")
+    abstract suspend fun deleteAllSubtasks()
+
+    @Query("DELETE FROM comments")
+    abstract suspend fun deleteAllComments()
+
+    @Query("DELETE FROM subtasks WHERE id = :id")
+    abstract suspend fun deleteSubtask(id: Long)
+
+    @Query("DELETE FROM comments WHERE id = :id")
+    abstract suspend fun deleteComment(id: Long)
+
+    @Query("UPDATE subtasks SET status = :status WHERE id = :id")
+    abstract suspend fun setSubtaskStatus(id: Long, status: Int)
+
+    @Query("SELECT COALESCE(MAX(id), 0) + 1 FROM subtasks")
+    abstract suspend fun nextSubtaskId(): Long
+
+    @Query("SELECT COALESCE(MAX(id), 0) + 1 FROM comments")
+    abstract suspend fun nextCommentId(): Long
+
+    @Query("DELETE FROM subtasks WHERE taskId NOT IN (SELECT id FROM tasks)")
+    abstract suspend fun deleteOrphanSubtasks()
+
+    @Query("DELETE FROM comments WHERE taskId NOT IN (SELECT id FROM tasks)")
+    abstract suspend fun deleteOrphanComments()
+
+    @Query("SELECT COUNT(*) FROM tasks WHERE id = :id")
+    abstract suspend fun taskCount(id: Long): Int
+
+    /** Removes subtasks and comments whose task no longer exists. */
+    @Transaction
+    open suspend fun deleteOrphans() {
+        deleteOrphanSubtasks()
+        deleteOrphanComments()
+    }
+
+    /** Replaces the cached subtasks of one task with what the server said. */
+    @Transaction
+    open suspend fun replaceSubtasks(taskId: Long, subtasks: List<SubtaskEntity>) {
+        deleteSubtasksOf(taskId)
+        upsertSubtasks(subtasks)
+    }
+
+    /** Replaces the cached comments of one task with what the server said. */
+    @Transaction
+    open suspend fun replaceComments(taskId: Long, comments: List<CommentEntity>) {
+        deleteCommentsOf(taskId)
+        upsertComments(comments)
+    }
+
     /** Wipes everything, including the queue. Used when switching between modes. */
     @Transaction
     open suspend fun clearAll() {
+        deleteAllSubtasks()
+        deleteAllComments()
         deleteAllOps()
         deleteAllTasks()
         deleteAllColumns()
@@ -204,6 +284,7 @@ abstract class BoardDao {
         deleteColumnsOf(projectId)
         upsertColumns(columns)
         upsertTasks(tasks)
+        deleteOrphans()
     }
 
     /** Stores the project list from the server and forgets projects that are gone. */
@@ -214,6 +295,7 @@ abstract class BoardDao {
         deleteColumnsOfProjectsNotIn(keep)
         deleteProjectsNotIn(keep)
         upsertProjects(projects)
+        deleteOrphans()
     }
 
     /** Puts tasks into a column in exactly the given order (positions 1, 2, 3 ...). */
@@ -252,8 +334,11 @@ abstract class BoardDao {
 
 /** The database itself. Bump [version] and add a migration whenever a table changes. */
 @Database(
-    entities = [ProjectEntity::class, ColumnEntity::class, TaskEntity::class, PendingOp::class],
-    version = 2,
+    entities = [
+        ProjectEntity::class, ColumnEntity::class, TaskEntity::class, PendingOp::class,
+        SubtaskEntity::class, CommentEntity::class,
+    ],
+    version = 3,
     exportSchema = true,
 )
 abstract class BoardDatabase : RoomDatabase() {
@@ -264,6 +349,24 @@ abstract class BoardDatabase : RoomDatabase() {
          * Version 1 -> 2: adds the queue table and the colour / priority of tasks.
          * Existing local-only data is kept untouched.
          */
+        /** Version 2 -> 3: adds subtasks and comments. Existing data is kept untouched. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `subtasks` (" +
+                        "`id` INTEGER NOT NULL, `taskId` INTEGER NOT NULL, `title` TEXT NOT NULL, " +
+                        "`status` INTEGER NOT NULL, `position` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_subtasks_taskId` ON `subtasks` (`taskId`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `comments` (" +
+                        "`id` INTEGER NOT NULL, `taskId` INTEGER NOT NULL, `author` TEXT NOT NULL, " +
+                        "`content` TEXT NOT NULL, `created` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_comments_taskId` ON `comments` (`taskId`)")
+            }
+        }
+
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -282,7 +385,7 @@ abstract class BoardDatabase : RoomDatabase() {
 
         fun create(context: Context): BoardDatabase =
             Room.databaseBuilder(context, BoardDatabase::class.java, "boardme.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

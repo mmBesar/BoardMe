@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -342,8 +344,24 @@ fun MarkdownText(source: String, modifier: Modifier = Modifier) {
     )
     val blocks = remember(source, theme) { parseMarkdown(source, theme) }
     val base = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Content)
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        blocks.forEach { block -> MarkdownBlockView(block, base) }
+    // A tapped link must never crash the app, even if no app on the phone can open it.
+    val handler = LocalUriHandler.current
+    val safeHandler = remember(handler) { SafeUriHandler(handler) }
+    CompositionLocalProvider(LocalUriHandler provides safeHandler) {
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            blocks.forEach { block -> MarkdownBlockView(block, base) }
+        }
+    }
+}
+
+/** Opens links like the normal handler, but swallows "no app can open this". */
+private class SafeUriHandler(private val inner: UriHandler) : UriHandler {
+    override fun openUri(uri: String) {
+        try {
+            inner.openUri(uri)
+        } catch (e: Exception) {
+            // Nothing to open it with: ignore.
+        }
     }
 }
 

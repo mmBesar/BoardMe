@@ -109,8 +109,8 @@
     <string name="error_missing_login">Enter your username and password (or personal access token).</string>
     <string name="error_network">Cannot reach the server. Check the address and your connection. Saved data is still shown.</string>
     <string name="error_certificate">The server certificate is not trusted.</string>
-    <string name="error_certificate_changed">The server certificate is not the one you trusted. If it was renewed on purpose, switch mode and connect again to trust the new one.</string>
-    <string name="error_unauthorized">Wrong username, password or token.</string>
+    <string name="error_certificate_changed">The server certificate is not the one you trusted. If it was renewed on purpose, open Settings, then Edit server address or user, and connect again to trust the new one.</string>
+    <string name="error_unauthorized">Login refused. Use your username with your password or personal token, or the username jsonrpc with the application API token.</string>
     <string name="error_forbidden">This account is not allowed to do that.</string>
     <string name="error_rejected">The server refused the change.</string>
     <string name="error_server">The server reported a problem: %s</string>
@@ -204,4 +204,21 @@
     <string name="about_license">Free software under the GNU GPL v3. Source: github.com/mmBesar/BoardMe</string>
     <string name="setup_edit_title">Edit connection</string>
     <string name="setup_edit_warning">Saving connects again and replaces the copy of your boards on this phone. Changes that have not reached the server yet will be lost.</string>
+
+    <!-- Task details, subtasks, comments -->
+    <string name="task_details">Details</string>
+    <string name="details_subtasks">Subtasks</string>
+    <string name="details_comments">Comments</string>
+    <string name="details_no_subtasks">No subtasks yet.</string>
+    <string name="details_no_comments">No comments yet.</string>
+    <string name="details_delete">Delete</string>
+    <string name="details_not_synced">This task has not reached the server yet. Wait until it has synced, then try again.</string>
+    <string name="subtask_hint">New subtask</string>
+    <string name="comment_hint">Write a comment (Markdown works)</string>
+    <string name="comment_author_me">Me</string>
+    <string name="action_add">Add</string>
+    <string name="action_send">Send</string>
+
+    <!-- Login help -->
+    <string name="setup_login_help">Log in with your Kanboard username and your password or personal access token. You can also use the username jsonrpc with the application API token from Kanboard\'s Settings, API page.</string>
 </resources>

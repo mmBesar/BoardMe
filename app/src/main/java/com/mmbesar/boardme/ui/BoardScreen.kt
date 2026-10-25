@@ -84,12 +84,14 @@ fun BoardScreen(viewModel: BoardViewModel, themePrefs: ThemePrefs) {
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
     val certReview by viewModel.certReview.collectAsStateWithLifecycle()
     val look by themePrefs.settings.collectAsStateWithLifecycle()
+    val subtaskCounts by viewModel.subtaskCounts.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) { viewModel.events.collect { snackbar.showSnackbar(it) } }
 
     var showClosed by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var detailsId by rememberSaveable { mutableStateOf<Long?>(null) }
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var dialog by remember { mutableStateOf<BoardDialog?>(null) }
@@ -106,19 +108,37 @@ fun BoardScreen(viewModel: BoardViewModel, themePrefs: ThemePrefs) {
     ) { uri -> if (uri != null) dialog = BoardDialog.ConfirmImport(uri) }
 
     // Back closes whatever is on top: settings, closed tasks, then search.
+    val detailsTask = detailsId?.let { id -> allTasks.firstOrNull { it.id == id } }
+    // A task that disappeared (closed, deleted, got its server id) must not leave a dead "open" flag.
+    LaunchedEffect(detailsTask == null) { if (detailsTask == null) detailsId = null }
+    BackHandler(enabled = detailsTask != null && !showSettings && !showClosed) { detailsId = null }
     BackHandler(enabled = showSettings) { showSettings = false }
     BackHandler(enabled = showClosed && !showSettings) { showClosed = false }
-    BackHandler(enabled = searching && !showClosed && !showSettings) {
+    BackHandler(enabled = searching && detailsTask == null && !showClosed && !showSettings) {
         searching = false
         query = ""
     }
 
     if (showSettings) {
-        SettingsScreen(themePrefs = themePrefs, viewModel = viewModel, onBack = { showSettings = false })
+        SettingsScreen(themePrefs = themePrefs, viewModel = viewModel, snackbar = snackbar, onBack = { showSettings = false })
         return
     }
     if (showClosed) {
         ClosedTasksScreen(viewModel = viewModel, snackbar = snackbar, onBack = { showClosed = false })
+        return
+    }
+
+    if (detailsTask != null) {
+        TaskDetailsScreen(
+            viewModel = viewModel,
+            task = detailsTask,
+            snackbar = snackbar,
+            onEdit = {
+                detailsId = null
+                dialog = BoardDialog.EditTask(detailsTask)
+            },
+            onBack = { detailsId = null },
+        )
         return
     }
 
@@ -292,10 +312,12 @@ fun BoardScreen(viewModel: BoardViewModel, themePrefs: ThemePrefs) {
                     // Dragging a card in a filtered list would drop it at a misleading place.
                     dragEnabled = needle.isEmpty(),
                     showDescriptions = look.showDescriptions,
+                    subtaskCounts = subtaskCounts,
                     pagerState = pagerState,
                     refreshing = refreshing,
                     onRefresh = { viewModel.refreshCurrent() },
                     onEdit = { dialog = BoardDialog.EditTask(it) },
+                    onDetails = { detailsId = it.id },
                     onMove = { task, columnId, before -> viewModel.moveTask(task, columnId, before) },
                     onClose = { viewModel.closeTask(it) },
                 )

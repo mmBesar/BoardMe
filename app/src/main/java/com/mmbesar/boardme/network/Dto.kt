@@ -90,3 +90,23 @@ data class TaskDto(
     @Serializable(with = FlexibleStringSerializer::class) val colorId: String = "",
     @Serializable(with = FlexibleLongSerializer::class) val priority: Long = 0,
 )
+
+/** One subtask. status: 0 = to do, 1 = in progress, 2 = done. */
+@Serializable
+data class SubtaskDto(
+    @Serializable(with = FlexibleLongSerializer::class) val id: Long = 0,
+    @Serializable(with = FlexibleStringSerializer::class) val title: String = "",
+    @Serializable(with = FlexibleLongSerializer::class) val status: Long = 0,
+    @Serializable(with = FlexibleLongSerializer::class) val position: Long = 0,
+)
+
+/** One comment. [name] is the author's full name (may be empty), [username] the login name. */
+@Serializable
+data class CommentDto(
+    @Serializable(with = FlexibleLongSerializer::class) val id: Long = 0,
+    @SerialName("date_creation")
+    @Serializable(with = FlexibleLongSerializer::class) val dateCreation: Long = 0,
+    @Serializable(with = FlexibleStringSerializer::class) val comment: String = "",
+    @Serializable(with = FlexibleStringSerializer::class) val name: String = "",
+    @Serializable(with = FlexibleStringSerializer::class) val username: String = "",
+)

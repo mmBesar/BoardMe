@@ -195,4 +195,43 @@ class BoardApiTest {
         val e = assertThrows(ApiException::class.java) { runBlocking { api.getMe() } }
         assertEquals(ApiException.Kind.BAD_RESPONSE, e.kind)
     }
+
+    @Test
+    fun applicationLoginUsesTheApplicationWideCalls() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"jsonrpc":"2.0","id":1,"result":"1.2.40"}"""))
+        server.enqueue(MockResponse().setBody(projectsReply))
+        server.start()
+        val api = BoardApi(
+            HttpClients.create(null, allowCleartext = true),
+            server.url("/jsonrpc.php").toString(),
+            "jsonrpc",
+            "app-token",
+        )
+        api.getMe()
+        assertEquals(1, api.getMyProjects().size)
+        // Application credentials have no user: no request is needed to know that.
+        assertEquals(0L, api.myUserId())
+        val first = server.takeRequest().body.readUtf8()
+        val second = server.takeRequest().body.readUtf8()
+        assertTrue(first.contains("getVersion"))
+        assertTrue(second.contains("getAllProjects"))
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test
+    fun subtasksAndCommentsAcceptListOrMapAnswers() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"jsonrpc":"2.0","id":1,"result":[{"id":"1","title":"A","status":"0"}]}"""))
+        server.enqueue(MockResponse().setBody("""{"jsonrpc":"2.0","id":1,"result":{"7":{"id":"7","comment":"hi","username":"mo","date_creation":"5"}}}"""))
+        server.enqueue(MockResponse().setBody("""{"jsonrpc":"2.0","id":1,"result":false}"""))
+        server.start()
+        val api = BoardApi(
+            HttpClients.create(null, allowCleartext = true),
+            server.url("/jsonrpc.php").toString(),
+            "alice",
+            "secret",
+        )
+        assertEquals("A", api.getSubtasks(3).single().title)
+        assertEquals("hi", api.getComments(3).single().comment)
+        assertTrue(api.getComments(4).isEmpty())
+    }
 }

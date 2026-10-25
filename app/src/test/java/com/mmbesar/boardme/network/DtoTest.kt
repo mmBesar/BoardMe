@@ -38,6 +38,24 @@ class DtoTest {
     }
 
     @Test
+    fun subtasksAndCommentsAreRead() {
+        val sub = json.decodeFromString(
+            SubtaskDto.serializer(),
+            """{"id":"4","title":"Pack","status":"2","task_id":"9","position":"1"}""",
+        )
+        assertEquals(4L, sub.id)
+        assertEquals(2L, sub.status)
+        val comment = json.decodeFromString(
+            CommentDto.serializer(),
+            """{"id":"5","task_id":"9","date_creation":"1790000000","comment":"Hi **there**","name":null,"username":"mo"}""",
+        )
+        assertEquals("Hi **there**", comment.comment)
+        assertEquals("", comment.name)
+        assertEquals("mo", comment.username)
+        assertEquals(1790000000L, comment.dateCreation)
+    }
+
+    @Test
     fun realNumbersAreAcceptedToo() {
         val task = json.decodeFromString(
             TaskDto.serializer(),

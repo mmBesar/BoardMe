@@ -62,8 +62,11 @@ class ApiException(
  * Typed client for Kanboard's JSON-RPC API (POST <server>/jsonrpc.php).
  * Keep ALL JSON-RPC calls in this one class.
  *
- * Login uses HTTP Basic auth with your Kanboard username and a personal
- * access token (Kanboard: profile > API access).
+ * Login uses HTTP Basic auth. Kanboard accepts two kinds of credentials:
+ *  - user credentials: your own username + your password (or a personal access token);
+ *  - application credentials: the username "jsonrpc" + the application API token
+ *    from Kanboard's Settings > API. These have no user behind them, so the
+ *    "me" calls (getMe, getMyProjects) are replaced by their application-wide twins.
  *
  * Privacy rule: never log request or response bodies - they contain private
  * task data and credentials.
@@ -79,13 +82,17 @@ class BoardApi(
 
     // ---- Calls we use -----------------------------------------------------
 
-    /** Used to test the login. Fails with UNAUTHORIZED if the token is wrong. */
+    /** True when logged in with the application API token (username "jsonrpc"). */
+    private val isApplication: Boolean get() = username == APPLICATION_USER
+
+    /** Used to test the login. Fails with UNAUTHORIZED if the login is wrong. */
     suspend fun getMe() {
-        call("getMe")
+        // Application credentials have no "me"; asking for the version proves the login works.
+        call(if (isApplication) "getVersion" else "getMe")
     }
 
     suspend fun getMyProjects(): List<ProjectDto> =
-        decodeList(call("getMyProjects", rejectFalse = false))
+        decodeList(call(if (isApplication) "getAllProjects" else "getMyProjects", rejectFalse = false))
 
     /** A project always has columns, so "false" here is a real failure (never "empty"). */
     suspend fun getColumns(projectId: Long): List<ColumnDto> =
@@ -216,6 +223,68 @@ class BoardApi(
         call("disableProject", buildJsonObject { put("project_id", projectId) })
     }
 
+    // ---- Subtasks and comments --------------------------------------------
+
+    suspend fun getSubtasks(taskId: Long): List<SubtaskDto> =
+        decodeList(call("getAllSubtasks", buildJsonObject { put("task_id", taskId) }, rejectFalse = false))
+
+    /** Returns the id of the new subtask. */
+    suspend fun createSubtask(taskId: Long, title: String): Long {
+        val result = call(
+            "createSubtask",
+            buildJsonObject {
+                put("task_id", taskId)
+                put("title", title)
+            },
+        )
+        return result.jsonPrimitive.contentOrNull?.toLongOrNull()
+            ?: throw ApiException(ApiException.Kind.BAD_RESPONSE, "createSubtask returned no id")
+    }
+
+    /** status: 0 = to do, 1 = in progress, 2 = done. */
+    suspend fun updateSubtaskStatus(subtaskId: Long, taskId: Long, status: Int) {
+        call(
+            "updateSubtask",
+            buildJsonObject {
+                put("id", subtaskId)
+                put("task_id", taskId)
+                put("status", status)
+            },
+        )
+    }
+
+    suspend fun removeSubtask(subtaskId: Long) {
+        call("removeSubtask", buildJsonObject { put("subtask_id", subtaskId) })
+    }
+
+    suspend fun getComments(taskId: Long): List<CommentDto> =
+        decodeList(call("getAllComments", buildJsonObject { put("task_id", taskId) }, rejectFalse = false))
+
+    /** Returns the id of the new comment. */
+    suspend fun createComment(taskId: Long, userId: Long, content: String): Long {
+        val result = call(
+            "createComment",
+            buildJsonObject {
+                put("task_id", taskId)
+                put("user_id", userId)
+                put("content", content)
+            },
+        )
+        return result.jsonPrimitive.contentOrNull?.toLongOrNull()
+            ?: throw ApiException(ApiException.Kind.BAD_RESPONSE, "createComment returned no id")
+    }
+
+    suspend fun removeComment(commentId: Long) {
+        call("removeComment", buildJsonObject { put("comment_id", commentId) })
+    }
+
+    /** The logged-in user's id (0 for application credentials, which have no user). */
+    suspend fun myUserId(): Long {
+        if (isApplication) return 0L
+        val me = call("getMe") as? JsonObject
+        return me?.get("id")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+    }
+
     // ---- Plumbing ---------------------------------------------------------
 
     /**
@@ -299,6 +368,8 @@ class BoardApi(
         result is JsonPrimitive && !result.isString && result.content == "false"
 
     private companion object {
+        /** Kanboard's fixed username for the application-wide API token. */
+        const val APPLICATION_USER = "jsonrpc"
         val JSON_TYPE = "application/json".toMediaType()
     }
 }

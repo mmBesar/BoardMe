@@ -105,6 +105,12 @@ fun SetupScreen(viewModel: BoardViewModel) {
             modifier = Modifier.fillMaxWidth(),
         )
 
+        Text(
+            stringResource(R.string.setup_login_help),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         Button(
             onClick = {
                 if (isHttp) showHttpWarning = true else viewModel.connect(address, username, token)

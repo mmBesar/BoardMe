@@ -32,6 +32,10 @@ data class Connection(
     val pinnedSha256: String?,
 ) {
     val isCleartext: Boolean get() = endpoint.startsWith("http://", ignoreCase = true)
+
+    /** Never print the token (it could end up in a crash report or a log by accident). */
+    override fun toString(): String =
+        "Connection(endpoint=$endpoint, username=$username, token=***, pinnedSha256=$pinnedSha256)"
 }
 
 /**

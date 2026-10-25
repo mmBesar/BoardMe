@@ -13,8 +13,11 @@ import androidx.lifecycle.viewModelScope
 import com.mmbesar.boardme.BoardMeApplication
 import com.mmbesar.boardme.R
 import com.mmbesar.boardme.data.ColumnEntity
+import com.mmbesar.boardme.data.CommentEntity
 import com.mmbesar.boardme.data.ProjectEntity
 import com.mmbesar.boardme.data.SyncResult
+import com.mmbesar.boardme.data.SubtaskCount
+import com.mmbesar.boardme.data.SubtaskEntity
 import com.mmbesar.boardme.data.SyncState
 import com.mmbesar.boardme.data.TaskEntity
 import com.mmbesar.boardme.network.ApiException
@@ -28,6 +31,7 @@ import com.mmbesar.boardme.widget.RefreshWorker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -125,6 +129,11 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
 
     val pendingTaskIds: StateFlow<Set<Long>> = repo.observePendingTaskIds()
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** "2 of 5 subtasks done" per task, for the cards. */
+    val subtaskCounts: StateFlow<Map<Long, SubtaskCount>> = repo.observeSubtaskCounts()
+        .map { list -> list.associateBy { it.taskId } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     /** What the sync indicator shows (offline, syncing, login problem ...). */
     val syncState: StateFlow<SyncState> = repo.syncState
@@ -353,6 +362,48 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
     /** Moves [task] to [columnId], right before [beforeTaskId] (null = at the bottom). */
     fun moveTask(task: TaskEntity, columnId: Long, beforeTaskId: Long?) =
         localOp { repo.moveTask(task, columnId, beforeTaskId) }
+
+    // ---- Subtasks and comments (need the server in server mode; the cached copy can be read offline) ----
+
+    fun subtasks(taskId: Long): Flow<List<SubtaskEntity>> = repo.observeSubtasks(taskId)
+
+    fun comments(taskId: Long): Flow<List<CommentEntity>> = repo.observeComments(taskId)
+
+    /** Called when the details screen opens: updates the cached copy if the server can be reached. */
+    fun refreshDetails(task: TaskEntity) {
+        viewModelScope.launch {
+            try {
+                repo.refreshDetails(task)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Offline or refused: the cached copy stays, nothing to report.
+            }
+        }
+    }
+
+    fun addSubtask(task: TaskEntity, title: String) = detailOp(task) { repo.addSubtask(task, title) }
+
+    /** Tapping a subtask: to do / in progress -> done, done -> to do. */
+    fun toggleSubtask(task: TaskEntity, subtask: SubtaskEntity) =
+        detailOp(task) { repo.setSubtaskStatus(subtask, if (subtask.status == 2) 0 else 2) }
+
+    fun deleteSubtask(task: TaskEntity, subtask: SubtaskEntity) =
+        detailOp(task) { repo.deleteSubtask(subtask) }
+
+    fun addComment(task: TaskEntity, text: String) =
+        detailOp(task) { repo.addComment(task, text, str(R.string.comment_author_me)) }
+
+    fun deleteComment(task: TaskEntity, comment: CommentEntity) =
+        detailOp(task) { repo.deleteComment(comment) }
+
+    private fun detailOp(task: TaskEntity, block: suspend () -> Unit) {
+        if (repo.mode == Mode.KANBOARD && task.id <= 0L) {
+            _events.tryEmit(str(R.string.details_not_synced))
+            return
+        }
+        onlineOp(block)
+    }
 
     fun closeTask(task: TaskEntity) = localOp { repo.setTaskClosed(task, closed = true) }
 

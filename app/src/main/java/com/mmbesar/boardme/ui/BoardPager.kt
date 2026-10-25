@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import com.mmbesar.boardme.R
 import com.mmbesar.boardme.data.ColumnEntity
 import com.mmbesar.boardme.data.DueDates
+import com.mmbesar.boardme.data.SubtaskCount
 import com.mmbesar.boardme.data.TaskEntity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -138,10 +139,12 @@ internal fun BoardPager(
     pendingIds: Set<Long>,
     dragEnabled: Boolean,
     showDescriptions: Boolean,
+    subtaskCounts: Map<Long, SubtaskCount>,
     pagerState: PagerState,
     refreshing: Boolean,
     onRefresh: () -> Unit,
     onEdit: (TaskEntity) -> Unit,
+    onDetails: (TaskEntity) -> Unit,
     onMove: (task: TaskEntity, columnId: Long, beforeTaskId: Long?) -> Unit,
     onClose: (TaskEntity) -> Unit,
 ) {
@@ -330,12 +333,14 @@ internal fun BoardPager(
                                     task = task,
                                     pending = task.id in pendingIds,
                                     showDescription = showDescriptions,
+                                    subtasks = subtaskCounts[task.id],
                                     dragging = drag.task?.id == task.id,
                                     canMoveLeft = page > 0,
                                     canMoveRight = page < columns.lastIndex,
                                     canMoveUp = index > 0,
                                     canMoveDown = index < inColumn.lastIndex,
                                     onEdit = { onEdit(task) },
+                                    onDetails = { onDetails(task) },
                                     onMoveLeft = {
                                         val target = columns[page - 1]
                                         onMove(task, target.id, byColumn[target.id].orEmpty().getOrNull(index)?.id)
@@ -409,12 +414,14 @@ private fun TaskCard(
     task: TaskEntity,
     pending: Boolean,
     showDescription: Boolean,
+    subtasks: SubtaskCount?,
     dragging: Boolean,
     canMoveLeft: Boolean,
     canMoveRight: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onEdit: () -> Unit,
+    onDetails: () -> Unit,
     onMoveLeft: () -> Unit,
     onMoveRight: () -> Unit,
     onMoveUp: () -> Unit,
@@ -462,7 +469,7 @@ private fun TaskCard(
                         )
                     }
                     val due = task.dueDate
-                    if (due != null || task.priority > 0 || pending) {
+                    if (due != null || task.priority > 0 || pending || subtasks != null) {
                         Row(
                             modifier = Modifier.padding(top = 4.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -473,6 +480,13 @@ private fun TaskCard(
                                     style = MaterialTheme.typography.labelMedium,
                                     color = if (DueDates.isOverdue(due)) MaterialTheme.colorScheme.error
                                     else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            if (subtasks != null) {
+                                Text(
+                                    text = "☑ ${subtasks.done}/${subtasks.total}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             if (task.priority > 0) {
@@ -503,6 +517,10 @@ private fun TaskCard(
                         Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.menu_more))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.task_details)) },
+                            onClick = { menuOpen = false; onDetails() },
+                        )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.task_edit)) },
                             onClick = { menuOpen = false; onEdit() },

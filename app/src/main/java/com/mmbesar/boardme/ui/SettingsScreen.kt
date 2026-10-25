@@ -30,6 +30,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -59,7 +61,12 @@ import com.mmbesar.boardme.widget.BoardWidget
 
 /** Settings: account (login, log out), appearance (applies instantly) and about. */
 @Composable
-fun SettingsScreen(themePrefs: ThemePrefs, viewModel: BoardViewModel, onBack: () -> Unit) {
+fun SettingsScreen(
+    themePrefs: ThemePrefs,
+    viewModel: BoardViewModel,
+    snackbar: SnackbarHostState,
+    onBack: () -> Unit,
+) {
     val settings by themePrefs.settings.collectAsStateWithLifecycle()
     val mode by viewModel.mode.collectAsStateWithLifecycle()
     val pendingCount by viewModel.pendingCount.collectAsStateWithLifecycle()
@@ -95,6 +102,7 @@ fun SettingsScreen(themePrefs: ThemePrefs, viewModel: BoardViewModel, onBack: ()
     val shownFlavor = flavorFor(settings.theme, systemDark)
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_title)) },

@@ -171,6 +171,91 @@ class BoardRepository(
         _syncState.value = SyncState.IDLE
     }
 
+    // ---- Subtasks and comments -------------------------------------------------------------------
+    // These need the server (they are not queued): the cached copy can always be READ offline.
+
+    fun observeSubtasks(taskId: Long): Flow<List<SubtaskEntity>> = dao.observeSubtasks(taskId)
+
+    fun observeComments(taskId: Long): Flow<List<CommentEntity>> = dao.observeComments(taskId)
+
+    fun observeSubtaskCounts(): Flow<List<SubtaskCount>> = dao.observeSubtaskCounts()
+
+    /** Downloads the subtasks and comments of one task. Without a connection the cached copy stays. */
+    suspend fun refreshDetails(task: TaskEntity) {
+        if (mode != Mode.KANBOARD || task.id <= 0L) return
+        val startedIn = generation
+        val api = api()
+        val subtasks = api.getSubtasks(task.id).map { it.toEntity(task.id) }
+        val comments = api.getComments(task.id).map { it.toEntity(task.id) }
+        dbLock.withLock {
+            // The login was changed while downloading: these rows belong to an old workspace.
+            if (generation != startedIn || dao.taskCount(task.id) == 0) return
+            dao.replaceSubtasks(task.id, subtasks)
+            dao.replaceComments(task.id, comments)
+        }
+    }
+
+    /** After a successful change: a failing refresh must not look like a failed change (a retry would duplicate it). */
+    private suspend fun refreshQuietly(task: TaskEntity) {
+        try {
+            refreshDetails(task)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: ApiException) {
+            // The change itself worked; the list refreshes the next time the screen opens.
+        }
+    }
+
+    suspend fun addSubtask(task: TaskEntity, title: String) {
+        if (mode == Mode.LOCAL) {
+            dbLock.withLock {
+                val id = dao.nextSubtaskId()
+                dao.upsertSubtasks(listOf(SubtaskEntity(id, task.id, title, 0, id.toInt())))
+            }
+        } else {
+            requireOnServer(task)
+            api().createSubtask(task.id, title)
+            refreshQuietly(task)
+        }
+    }
+
+    suspend fun setSubtaskStatus(subtask: SubtaskEntity, status: Int) {
+        if (mode != Mode.LOCAL) api().updateSubtaskStatus(subtask.id, subtask.taskId, status)
+        dbLock.withLock { dao.setSubtaskStatus(subtask.id, status) }
+    }
+
+    suspend fun deleteSubtask(subtask: SubtaskEntity) {
+        if (mode != Mode.LOCAL) api().removeSubtask(subtask.id)
+        dbLock.withLock { dao.deleteSubtask(subtask.id) }
+    }
+
+    /** [localAuthor] is only used in local-only mode (the server knows who you are). */
+    suspend fun addComment(task: TaskEntity, text: String, localAuthor: String) {
+        if (mode == Mode.LOCAL) {
+            dbLock.withLock {
+                val id = dao.nextCommentId()
+                dao.upsertComments(
+                    listOf(CommentEntity(id, task.id, localAuthor, text, System.currentTimeMillis() / 1000)),
+                )
+            }
+        } else {
+            requireOnServer(task)
+            val api = api()
+            api.createComment(task.id, api.myUserId(), text)
+            refreshQuietly(task)
+        }
+    }
+
+    suspend fun deleteComment(comment: CommentEntity) {
+        if (mode != Mode.LOCAL) api().removeComment(comment.id)
+        dbLock.withLock { dao.deleteComment(comment.id) }
+    }
+
+    /** Tasks created offline have no server id yet, so nothing can be attached to them. */
+    private fun requireOnServer(task: TaskEntity) {
+        if (task.id <= 0L) throw ApiException(ApiException.Kind.REJECTED, "The task has not reached the server yet")
+    }
+
     // ---- Tasks: written locally at once, queued for the server -------------------------------------
 
     suspend fun createTask(
@@ -242,6 +327,8 @@ class BoardRepository(
     suspend fun deleteTask(task: TaskEntity) {
         dbLock.withLock {
             dao.deleteTask(task.id)
+            dao.deleteSubtasksOf(task.id)
+            dao.deleteCommentsOf(task.id)
             if (mode != Mode.LOCAL) enqueue(OpType.DELETE, task.id, task.projectId)
         }
     }

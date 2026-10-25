@@ -5,6 +5,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.4.0] - not released yet
+
+### Added
+- Task details screen (card menu, Details): the description with Markdown shown properly, **subtasks** (tap to tick off, add, delete) and **comments** (add, delete, Markdown works). Cards show "☑ 2/5" for subtasks. Loaded copies stay readable offline; adding and changing needs a connection.
+- Login with the Kanboard application API token (username `jsonrpc`), besides your own password or personal access token; the login screen explains both.
+
+### Changed
+- Database upgraded to version 3 (existing data is kept).
+
+### Known limits
+- Subtasks and comments are not part of local backups yet.
+
 ## [0.3.0] - not released yet
 
 ### Added

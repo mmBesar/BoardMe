@@ -4,6 +4,8 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.mmbesar.boardme.network.ColumnDto
+import com.mmbesar.boardme.network.CommentDto
+import com.mmbesar.boardme.network.SubtaskDto
 import com.mmbesar.boardme.network.ProjectDto
 import com.mmbesar.boardme.network.TaskDto
 import java.text.SimpleDateFormat
@@ -50,6 +52,29 @@ data class TaskEntity(
     val priority: Int,
 )
 
+/** A checklist item of a task. status: 0 = to do, 1 = in progress, 2 = done. */
+@Entity(tableName = "subtasks", indices = [Index("taskId")])
+data class SubtaskEntity(
+    @PrimaryKey val id: Long,
+    val taskId: Long,
+    val title: String,
+    val status: Int,
+    val position: Int,
+)
+
+/** A comment on a task. [created] is in epoch seconds. */
+@Entity(tableName = "comments", indices = [Index("taskId")])
+data class CommentEntity(
+    @PrimaryKey val id: Long,
+    val taskId: Long,
+    val author: String,
+    val content: String,
+    val created: Long,
+)
+
+/** Result row of the "how many subtasks are done" question (shown on the cards). */
+data class SubtaskCount(val taskId: Long, val total: Int, val done: Int)
+
 /** The kinds of change that wait in the queue until the server can be reached. */
 enum class OpType { CREATE, UPDATE, MOVE, STATUS, DELETE }
 
@@ -79,6 +104,22 @@ data class PendingOp(
 )
 
 // ---- Converting Kanboard answers into table rows ---------------------------
+
+fun SubtaskDto.toEntity(taskId: Long) = SubtaskEntity(
+    id = id,
+    taskId = taskId,
+    title = title,
+    status = status.toInt().coerceIn(0, 2),
+    position = position.toInt(),
+)
+
+fun CommentDto.toEntity(taskId: Long) = CommentEntity(
+    id = id,
+    taskId = taskId,
+    author = name.ifBlank { username },
+    content = comment,
+    created = dateCreation,
+)
 
 fun ProjectDto.toEntity() = ProjectEntity(id = id, name = name, isActive = isActive == 1L)
 
