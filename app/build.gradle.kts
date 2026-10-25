@@ -85,10 +85,8 @@ kotlin {
     }
 }
 
-// Room writes its database schema here so future migrations can be checked.
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
-}
+// Room's schema export is switched off (see BoardDatabase): the debug and release builds both wrote
+// the same schema file at the same time, which made the release build fail.
 
 dependencies {
     // Jetpack Compose (UI)

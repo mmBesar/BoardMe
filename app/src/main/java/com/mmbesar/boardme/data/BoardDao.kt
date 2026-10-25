@@ -339,7 +339,8 @@ abstract class BoardDao {
         SubtaskEntity::class, CommentEntity::class,
     ],
     version = 3,
-    exportSchema = true,
+    // No schema files: debug and release builds would write the same file at once and clash.
+    exportSchema = false,
 )
 abstract class BoardDatabase : RoomDatabase() {
     abstract fun dao(): BoardDao

@@ -14,6 +14,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 ### Changed
 - Database upgraded to version 3 (existing data is kept).
 
+### Fixed
+- Release build failed because debug and release builds wrote the Room schema file at the same time; schema export is now off.
+
 ### Known limits
 - Subtasks and comments are not part of local backups yet.
 
