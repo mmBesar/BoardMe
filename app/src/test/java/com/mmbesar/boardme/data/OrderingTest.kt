@@ -3,36 +3,37 @@ package com.mmbesar.boardme.data
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
+/** Checks the pure "where does a moved task land" helper. */
 class OrderingTest {
 
     @Test
     fun insertsAtTop() {
-        assertEquals(listOf(9L, 1L, 2L, 3L), insertAt(listOf(1, 2, 3), movedId = 9, index = 0))
+        assertEquals(listOf(9L, 1L, 2L, 3L), insertBefore(listOf(1, 2, 3), movedId = 9, beforeId = 1))
     }
 
     @Test
     fun insertsInTheMiddle() {
-        assertEquals(listOf(1L, 9L, 2L, 3L), insertAt(listOf(1, 2, 3), movedId = 9, index = 1))
+        assertEquals(listOf(1L, 9L, 2L, 3L), insertBefore(listOf(1, 2, 3), movedId = 9, beforeId = 2))
     }
 
     @Test
-    fun hugeIndexMeansBottom() {
-        assertEquals(listOf(1L, 2L, 9L), insertAt(listOf(1, 2), movedId = 9, index = Int.MAX_VALUE))
+    fun nullMeansAtTheBottom() {
+        assertEquals(listOf(1L, 2L, 9L), insertBefore(listOf(1, 2), movedId = 9, beforeId = null))
     }
 
     @Test
-    fun negativeIndexMeansTop() {
-        assertEquals(listOf(9L, 1L, 2L), insertAt(listOf(1, 2), movedId = 9, index = -5))
+    fun unknownTargetMeansAtTheBottom() {
+        assertEquals(listOf(1L, 2L, 9L), insertBefore(listOf(1, 2), movedId = 9, beforeId = 77))
     }
 
     @Test
-    fun movingWithinTheSameColumnDoesNotDuplicate() {
-        // 2 is already in the list; moving it to the top must not leave a second copy.
-        assertEquals(listOf(2L, 1L, 3L), insertAt(listOf(1, 2, 3), movedId = 2, index = 0))
+    fun movingWithinTheSameColumnNeverDuplicates() {
+        assertEquals(listOf(2L, 1L, 3L), insertBefore(listOf(1, 2, 3), movedId = 2, beforeId = 1))
+        assertEquals(listOf(1L, 3L, 2L), insertBefore(listOf(1, 2, 3), movedId = 2, beforeId = null))
     }
 
     @Test
     fun emptyColumn() {
-        assertEquals(listOf(5L), insertAt(emptyList(), movedId = 5, index = 3))
+        assertEquals(listOf(5L), insertBefore(emptyList(), movedId = 5, beforeId = null))
     }
 }

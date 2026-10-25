@@ -17,6 +17,7 @@ import com.mmbesar.boardme.ui.BoardMeTheme
 import com.mmbesar.boardme.ui.BoardScreen
 import com.mmbesar.boardme.ui.BoardViewModel
 import com.mmbesar.boardme.ui.SetupScreen
+import com.mmbesar.boardme.ui.ThemePrefs
 
 /** The one and only screen container; Compose draws everything inside it. */
 class MainActivity : ComponentActivity() {
@@ -24,9 +25,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            BoardMeTheme {
+            val themePrefs = (application as BoardMeApplication).themePrefs
+            val settings by themePrefs.settings.collectAsStateWithLifecycle()
+            BoardMeTheme(settings) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    BoardMeRoot()
+                    BoardMeRoot(themePrefs)
                 }
             }
         }
@@ -35,11 +38,11 @@ class MainActivity : ComponentActivity() {
 
 /** First start -> setup screen; afterwards -> the board. */
 @Composable
-private fun BoardMeRoot(viewModel: BoardViewModel = viewModel()) {
+private fun BoardMeRoot(themePrefs: ThemePrefs, viewModel: BoardViewModel = viewModel()) {
     val mode by viewModel.mode.collectAsStateWithLifecycle()
     if (mode == Mode.UNSET) {
         SetupScreen(viewModel)
     } else {
-        BoardScreen(viewModel)
+        BoardScreen(viewModel, themePrefs)
     }
 }

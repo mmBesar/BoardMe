@@ -53,7 +53,8 @@ class BoardWidgetConfigActivity : ComponentActivity() {
         val setUp = app.repository.mode != Mode.UNSET
 
         setContent {
-            BoardMeTheme {
+            val settings by app.themePrefs.settings.collectAsStateWithLifecycle()
+            BoardMeTheme(settings) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val projects by app.repository.observeProjects()
                         .collectAsStateWithLifecycle(initialValue = emptyList())
@@ -94,6 +95,8 @@ class BoardWidgetConfigActivity : ComponentActivity() {
             val glanceId = GlanceAppWidgetManager(this@BoardWidgetConfigActivity)
                 .getGlanceIdBy(appWidgetId)
             BoardWidget().update(this@BoardWidgetConfigActivity, glanceId)
+            // Download the chosen project in the background (the app may never have opened it).
+            RefreshWorker.syncSoon(this@BoardWidgetConfigActivity)
             setResult(
                 RESULT_OK,
                 Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId),

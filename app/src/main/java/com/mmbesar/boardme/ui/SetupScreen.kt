@@ -42,7 +42,7 @@ fun SetupScreen(viewModel: BoardViewModel) {
 
     var address by rememberSaveable { mutableStateOf("") }
     var username by rememberSaveable { mutableStateOf("") }
-    var token by rememberSaveable { mutableStateOf("") }
+    var token by remember { mutableStateOf("") }
     var showHttpWarning by remember { mutableStateOf(false) }
 
     val working = state is ConnectState.Working

@@ -1,6 +1,10 @@
 package com.mmbesar.boardme.ui
 
 import android.app.Application
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.Uri
 import androidx.annotation.StringRes
 import androidx.glance.appwidget.updateAll
@@ -10,6 +14,8 @@ import com.mmbesar.boardme.BoardMeApplication
 import com.mmbesar.boardme.R
 import com.mmbesar.boardme.data.ColumnEntity
 import com.mmbesar.boardme.data.ProjectEntity
+import com.mmbesar.boardme.data.SyncResult
+import com.mmbesar.boardme.data.SyncState
 import com.mmbesar.boardme.data.TaskEntity
 import com.mmbesar.boardme.network.ApiException
 import com.mmbesar.boardme.network.CertFetcher
@@ -18,6 +24,7 @@ import com.mmbesar.boardme.network.ServerAddress
 import com.mmbesar.boardme.security.Connection
 import com.mmbesar.boardme.security.Mode
 import com.mmbesar.boardme.widget.BoardWidget
+import com.mmbesar.boardme.widget.RefreshWorker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,7 +35,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -63,6 +69,9 @@ data class ConnectionSummary(
 /**
  * Holds what the screens show and performs their actions. Screens talk only to
  * this class, never to the network or database directly.
+ *
+ * Offline-first: actions change the phone's database at once and return; the
+ * sync (see [requestSync]) sends them to the server in the background.
  */
 class BoardViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -110,37 +119,76 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repo.observeTasks(id, open = false) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    /** How many changes still wait for the server, and which tasks they belong to. */
+    val pendingCount: StateFlow<Int> = repo.observePendingCount()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    val pendingTaskIds: StateFlow<Set<Long>> = repo.observePendingTaskIds()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** What the sync indicator shows (offline, syncing, login problem ...). */
+    val syncState: StateFlow<SyncState> = repo.syncState
+
     private val _busy = MutableStateFlow(false)
 
-    /** true while a change is being sent (the UI shows a thin progress bar). */
+    /** true while an action that needs the server is running (the UI shows a thin progress bar). */
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
     private val _refreshing = MutableStateFlow(false)
 
-    /** true while a pull-to-refresh / automatic refresh runs. */
+    /** true while a pull-to-refresh sync runs. */
     val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
 
     private val _connectState = MutableStateFlow<ConnectState>(ConnectState.Idle)
     val connectState: StateFlow<ConnectState> = _connectState.asStateFlow()
+
+    private val _certReview = MutableStateFlow<ConnectState.ConfirmCertificate?>(null)
+
+    /** Set while the user is asked whether to trust a renewed server certificate. */
+    val certReview: StateFlow<ConnectState.ConfirmCertificate?> = _certReview.asStateFlow()
 
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 16)
 
     /** One-off messages to show in a snackbar. */
     val events: SharedFlow<String> = _events.asSharedFlow()
 
-    init {
-        if (repo.mode == Mode.KANBOARD) {
-            // Refresh the project list when the app opens.
-            viewModelScope.launch { refreshQuietly { repo.refreshProjects() } }
+    // ---- Waking up the sync -------------------------------------------------------------------------
+
+    private val connectivity = app.getSystemService(ConnectivityManager::class.java)
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        // A network (re)appeared, also right after registering: sync everything.
+        override fun onAvailable(network: Network) {
+            viewModelScope.launch { requestSync(full = true) }
         }
-        // Whenever another project comes on screen, download its latest content.
+    }
+
+    init {
+        try {
+            connectivity?.registerNetworkCallback(
+                NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .build(),
+                networkCallback,
+            )
+        } catch (e: Exception) {
+            // No connectivity service: the sync still runs on every change and on pull-to-refresh.
+        }
+        // Whenever another project comes on screen, bring its content up to date.
         viewModelScope.launch {
-            currentProject.map { it?.id }.distinctUntilChanged().collectLatest { id ->
-                if (id != null && repo.mode == Mode.KANBOARD) {
-                    refreshQuietly { repo.refreshProject(id) }
-                }
+            currentProject.map { it?.id }.distinctUntilChanged().collect { id ->
+                if (id != null) requestSync()
             }
         }
+    }
+
+    override fun onCleared() {
+        try {
+            connectivity?.unregisterNetworkCallback(networkCallback)
+        } catch (e: Exception) {
+            // Already gone.
+        }
+        super.onCleared()
     }
 
     // ---- First start: connect or go local -----------------------------------------------------
@@ -181,6 +229,7 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
                 _selectedProjectId.value = 0L
                 _mode.value = Mode.KANBOARD
                 _connectState.value = ConnectState.Idle
+                requestSync(full = true)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: ApiException) {
@@ -203,65 +252,107 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun startLocal() = launchOp {
+    fun startLocal() = onlineOp {
         repo.startLocal(str(R.string.starter_project_name))
         _selectedProjectId.value = 0L
         _mode.value = Mode.LOCAL
     }
 
     /** Forget this workspace on the phone and go back to the first-start screen. */
-    fun resetMode() = launchOp {
+    fun resetMode() = onlineOp {
         repo.reset()
         _selectedProjectId.value = 0L
         _connectState.value = ConnectState.Idle
         _mode.value = Mode.UNSET
     }
 
-    // ---- Board actions ----------------------------------------------------------------------------------
+    // ---- Recovering from a changed certificate or a rejected token --------------------------------------
+
+    /** Fetches the server's current certificate so the user can approve it. */
+    fun reviewCertificate() {
+        val connection = repo.currentConnection() ?: return
+        val parsed = ServerAddress.parse(connection.endpoint) ?: return
+        if (parsed.isCleartext) return
+        viewModelScope.launch {
+            try {
+                val info = CertFetcher.fetch(parsed.host, parsed.port)
+                _certReview.value = ConnectState.ConfirmCertificate(info, connection)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _events.tryEmit(str(R.string.error_network))
+            }
+        }
+    }
+
+    fun trustReviewedCertificate(state: ConnectState.ConfirmCertificate) {
+        repo.updatePin(state.info.sha256)
+        _certReview.value = null
+        requestSync(full = true, loud = true)
+    }
+
+    fun dismissCertReview() {
+        _certReview.value = null
+    }
+
+    fun updateToken(token: String) = onlineOp {
+        repo.updateToken(token)
+        requestSync(full = true, loud = true)
+    }
+
+    // ---- Board actions (saved at once, sent to the server in the background) --------------------------------
 
     fun selectProject(projectId: Long) {
         _selectedProjectId.value = projectId
         store.selectedProjectId = projectId
     }
 
-    /** Pull-to-refresh. */
-    fun refreshCurrent() {
-        if (repo.mode != Mode.KANBOARD) return
-        viewModelScope.launch {
-            refreshQuietly {
-                repo.refreshProjects()
-                currentProject.value?.let { repo.refreshProject(it.id) }
-            }
-            updateWidgets()
-        }
+    /** Pull-to-refresh: send what is waiting, then download the current project. */
+    fun refreshCurrent() = requestSync(loud = true)
+
+    /** "Sync now" in the menu: everything. */
+    fun syncNow() = requestSync(full = true, loud = true)
+
+    fun createTask(
+        columnId: Long,
+        title: String,
+        description: String,
+        dueDate: String?,
+        colorId: String,
+        priority: Int,
+    ) = localOp {
+        val project = currentProject.value ?: return@localOp
+        repo.createTask(project.id, columnId, title, description, dueDate, colorId, priority)
     }
 
-    fun createTask(columnId: Long, title: String, description: String, dueDate: String?) = launchOp {
-        val project = currentProject.value ?: return@launchOp
-        repo.createTask(project.id, columnId, title, description, dueDate)
-    }
+    fun updateTask(
+        task: TaskEntity,
+        title: String,
+        description: String,
+        dueDate: String?,
+        colorId: String,
+        priority: Int,
+    ) = localOp { repo.updateTask(task, title, description, dueDate, colorId, priority) }
 
-    fun updateTask(task: TaskEntity, title: String, description: String, dueDate: String?) = launchOp {
-        repo.updateTask(task, title, description, dueDate)
-    }
+    /** Moves [task] to [columnId], right before [beforeTaskId] (null = at the bottom). */
+    fun moveTask(task: TaskEntity, columnId: Long, beforeTaskId: Long?) =
+        localOp { repo.moveTask(task, columnId, beforeTaskId) }
 
-    fun moveTask(task: TaskEntity, columnId: Long, index: Int) = launchOp {
-        repo.moveTask(task, columnId, index)
-    }
+    fun closeTask(task: TaskEntity) = localOp { repo.setTaskClosed(task, closed = true) }
 
-    fun closeTask(task: TaskEntity) = launchOp { repo.setTaskClosed(task, closed = true) }
+    fun reopenTask(task: TaskEntity) = localOp { repo.setTaskClosed(task, closed = false) }
 
-    fun reopenTask(task: TaskEntity) = launchOp { repo.setTaskClosed(task, closed = false) }
+    fun deleteTask(task: TaskEntity) = localOp { repo.deleteTask(task) }
 
-    fun deleteTask(task: TaskEntity) = launchOp { repo.deleteTask(task) }
+    // Projects need the server, so they run as "online" actions.
 
-    fun createProject(name: String) = launchOp {
+    fun createProject(name: String) = onlineOp {
         val id = repo.createProject(name)
         selectProject(id)
     }
 
-    fun archiveCurrentProject() = launchOp {
-        val project = currentProject.value ?: return@launchOp
+    fun archiveCurrentProject() = onlineOp {
+        val project = currentProject.value ?: return@onlineOp
         repo.archiveProject(project.id)
         selectProject(0L)
     }
@@ -269,7 +360,7 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
     // ---- Backups ------------------------------------------------------------------------------------------
 
     /** Writes the backup (local mode) or server snapshot (Kanboard mode) to a file the user picked. */
-    fun exportTo(uri: Uri) = launchOp {
+    fun exportTo(uri: Uri) = onlineOp {
         val text = if (repo.mode == Mode.LOCAL) repo.exportLocalBackup() else repo.exportServerSnapshot()
         withContext(Dispatchers.IO) {
             val stream = getApplication<Application>().contentResolver.openOutputStream(uri, "wt")
@@ -280,7 +371,7 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Restores a backup file (local mode only). Replaces everything after validation. */
-    fun importFrom(uri: Uri) = launchOp {
+    fun importFrom(uri: Uri) = onlineOp {
         val text = withContext(Dispatchers.IO) {
             val stream = getApplication<Application>().contentResolver.openInputStream(uri)
                 ?: throw IllegalArgumentException(str(R.string.error_file_read))
@@ -309,10 +400,84 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
         return ConnectionSummary(c.endpoint, c.username, security, c.pinnedSha256)
     }
 
+    // ---- The sync scheduler ---------------------------------------------------------------------------------------
+
+    // Everything below runs on the main thread, so these plain variables need no locking.
+    private var syncRunning = false
+    private var syncAgain = false
+    private var wantFull = false
+    private var wantLoud = false
+
+    /**
+     * Asks for a sync. If one is already running, another run follows it (several
+     * quick changes cause one extra run, not one each).
+     * [full] = download all projects; [loud] = the user asked, so problems are shown.
+     */
+    private fun requestSync(full: Boolean = false, loud: Boolean = false) {
+        if (repo.mode != Mode.KANBOARD) return
+        wantFull = wantFull || full
+        wantLoud = wantLoud || loud
+        if (syncRunning) {
+            syncAgain = true
+            return
+        }
+        syncRunning = true
+        viewModelScope.launch {
+            try {
+                do {
+                    syncAgain = false
+                    val downloadAll = wantFull
+                    val showProblems = wantLoud
+                    wantFull = false
+                    wantLoud = false
+
+                    if (showProblems) _refreshing.value = true
+                    val ids = if (downloadAll) null else listOfNotNull(currentProject.value?.id)
+                    val result = repo.sync(ids)
+                    _refreshing.value = false
+
+                    report(result, showProblems)
+                    updateWidgets()
+                } while (syncAgain)
+            } finally {
+                syncRunning = false
+                _refreshing.value = false
+            }
+        }
+    }
+
+    private fun report(result: SyncResult, loud: Boolean) {
+        if (result.dropped > 0) _events.tryEmit(str(R.string.sync_dropped, result.dropped))
+        val error = result.error ?: return
+        // A wrong login or a changed certificate has its own banner with a button.
+        val hasBanner = error.kind == ApiException.Kind.UNAUTHORIZED || error.kind == ApiException.Kind.CERTIFICATE
+        if (loud && !hasBanner) _events.tryEmit(describe(error))
+    }
+
     // ---- Helpers --------------------------------------------------------------------------------------------------
 
-    /** Runs one change with a progress bar, reports failures in a snackbar and refreshes widgets. */
-    private fun launchOp(block: suspend () -> Unit) {
+    /** A change saved on the phone at once; the sync sends it later. Shows no progress bar. */
+    private fun localOp(block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+                updateWidgets()
+                if (repo.mode == Mode.KANBOARD) {
+                    // Also hand it to Android's job scheduler: it sends the change when the
+                    // connection returns, even if the app is closed by then.
+                    RefreshWorker.syncSoon(getApplication<Application>())
+                    requestSync()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _events.tryEmit(describe(e))
+            }
+        }
+    }
+
+    /** An action that needs the server (or replaces everything): shows a progress bar, reports failures. */
+    private fun onlineOp(block: suspend () -> Unit) {
         viewModelScope.launch {
             _busy.value = true
             try {
@@ -325,20 +490,6 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 _busy.value = false
             }
-        }
-    }
-
-    /** Runs a refresh; on failure shows a message but keeps the saved (offline) data. */
-    private suspend fun refreshQuietly(block: suspend () -> Unit) {
-        _refreshing.value = true
-        try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            _events.tryEmit(describe(e))
-        } finally {
-            _refreshing.value = false
         }
     }
 
@@ -373,6 +524,6 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         /** Backups larger than this are refused. */
-        const val MAX_BACKUP_BYTES = 32 * 1024 * 1024
+        const val MAX_BACKUP_BYTES = 8 * 1024 * 1024
     }
 }

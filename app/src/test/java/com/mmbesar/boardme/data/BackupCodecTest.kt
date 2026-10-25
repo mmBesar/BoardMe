@@ -51,6 +51,12 @@ class BackupCodecTest {
     }
 
     @Test
+    fun emptyObjectIsRefused() {
+        // Without the required fields it must not be mistaken for an empty backup.
+        assertThrows(IllegalArgumentException::class.java) { BackupCodec.decode("{}") }
+    }
+
+    @Test
     fun garbageIsRefused() {
         assertThrows(IllegalArgumentException::class.java) { BackupCodec.decode("hello") }
     }

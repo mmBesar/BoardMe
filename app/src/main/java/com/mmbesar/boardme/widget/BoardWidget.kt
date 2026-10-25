@@ -29,8 +29,8 @@ import com.mmbesar.boardme.BoardMeApplication
 import com.mmbesar.boardme.MainActivity
 import com.mmbesar.boardme.R
 import com.mmbesar.boardme.data.WidgetData
-import com.mmbesar.boardme.ui.DarkColors
-import com.mmbesar.boardme.ui.LightColors
+import com.mmbesar.boardme.ui.ThemePrefs
+import com.mmbesar.boardme.ui.schemeFor
 
 /**
  * The home-screen widget: shows the open tasks of one project, grouped by column.
@@ -45,9 +45,13 @@ class BoardWidget : GlanceAppWidget() {
         val projectId = WidgetPrefs.projectFor(context, appWidgetId)
         val data = projectId?.let { app.repository.widgetSnapshot(it) }
         val emptyText = context.getString(R.string.widget_not_configured)
+        // Same look as the app: the chosen theme/accent, one scheme for light and one for dark phones.
+        val settings = ThemePrefs.load(context)
+        val light = schemeFor(settings, systemDark = false, context = context)
+        val dark = schemeFor(settings, systemDark = true, context = context)
 
         provideContent {
-            GlanceTheme(colors = ColorProviders(light = LightColors, dark = DarkColors)) {
+            GlanceTheme(colors = ColorProviders(light = light, dark = dark)) {
                 WidgetContent(data, emptyText)
             }
         }
@@ -80,7 +84,7 @@ private fun WidgetContent(data: WidgetData?, emptyText: String) {
                     fontWeight = FontWeight.Bold,
                 ),
             )
-            LazyColumn {
+            LazyColumn(modifier = GlanceModifier.fillMaxWidth()) {
                 items(data.rows) { row ->
                     Text(
                         text = if (row.isHeader) row.text else "• ${row.text}",

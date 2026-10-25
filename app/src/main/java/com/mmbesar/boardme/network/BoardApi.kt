@@ -87,8 +87,9 @@ class BoardApi(
     suspend fun getMyProjects(): List<ProjectDto> =
         decodeList(call("getMyProjects", rejectFalse = false))
 
+    /** A project always has columns, so "false" here is a real failure (never "empty"). */
     suspend fun getColumns(projectId: Long): List<ColumnDto> =
-        decodeList(call("getColumns", buildJsonObject { put("project_id", projectId) }, rejectFalse = false))
+        decodeList(call("getColumns", buildJsonObject { put("project_id", projectId) }))
 
     /** status 1 = open tasks, 0 = closed tasks. */
     suspend fun getAllTasks(projectId: Long, open: Boolean): List<TaskDto> =
@@ -107,9 +108,13 @@ class BoardApi(
     suspend fun createTask(
         projectId: Long,
         columnId: Long,
+        swimlaneId: Long,
         title: String,
         description: String,
         dueDate: String,
+        colorId: String,
+        priority: Int,
+        reference: String,
     ): Long {
         val result = call(
             "createTask",
@@ -118,14 +123,40 @@ class BoardApi(
                 put("project_id", projectId)
                 put("column_id", columnId)
                 put("description", description)
+                // Only send what is really set: an invalid colour would make Kanboard refuse the task.
+                if (swimlaneId > 0) put("swimlane_id", swimlaneId)
                 if (dueDate.isNotEmpty()) put("date_due", dueDate)
+                if (colorId.isNotEmpty()) put("color_id", colorId)
+                put("priority", priority)
+                if (reference.isNotEmpty()) put("reference", reference)
             },
         )
         return result.jsonPrimitive.contentOrNull?.toLongOrNull()
             ?: throw ApiException(ApiException.Kind.BAD_RESPONSE, "createTask returned no id")
     }
 
-    suspend fun updateTask(taskId: Long, title: String, description: String, dueDate: String) {
+    /** The id of the task carrying this reference tag, or null if there is none. */
+    suspend fun findTaskIdByReference(projectId: Long, reference: String): Long? {
+        val result = call(
+            "getTaskByReference",
+            buildJsonObject {
+                put("project_id", projectId)
+                put("reference", reference)
+            },
+            rejectFalse = false,
+        )
+        val task = result as? JsonObject ?: return null
+        return task["id"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+    }
+
+    suspend fun updateTask(
+        taskId: Long,
+        title: String,
+        description: String,
+        dueDate: String,
+        colorId: String,
+        priority: Int,
+    ) {
         call(
             "updateTask",
             buildJsonObject {
@@ -134,6 +165,8 @@ class BoardApi(
                 put("description", description)
                 // An empty text clears the due date.
                 put("date_due", dueDate)
+                if (colorId.isNotEmpty()) put("color_id", colorId)
+                put("priority", priority)
             },
         )
     }
@@ -153,7 +186,8 @@ class BoardApi(
                 put("task_id", taskId)
                 put("column_id", columnId)
                 put("position", position)
-                put("swimlane_id", swimlaneId)
+                // 0 / unknown (task created offline, not refreshed yet): let Kanboard use its default.
+                put("swimlane_id", if (swimlaneId > 0) swimlaneId else 0L)
             },
         )
     }

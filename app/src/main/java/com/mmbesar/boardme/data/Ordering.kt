@@ -1,14 +1,16 @@
 package com.mmbesar.boardme.data
 
 /**
- * Pure helper (no Android, easy to test): where does a moved task land?
+ * Pure helper (no Android, easy to test): the new order of a column after a move.
  *
- * [others] are the ids already in the target column (without the moved task).
- * The moved task is inserted at [index] (0 = top). Out-of-range values are
- * clamped, so "Int.MAX_VALUE" simply means "at the bottom".
+ * [others] are the ids already in the target column (and swimlane).
+ * The moved task is placed right BEFORE [beforeId]; null (or an id that is not
+ * in the list) means "at the very bottom". If the moved task was already in the
+ * list it is taken out first, so it never appears twice.
  */
-fun insertAt(others: List<Long>, movedId: Long, index: Int): List<Long> {
+fun insertBefore(others: List<Long>, movedId: Long, beforeId: Long?): List<Long> {
     val result = others.filter { it != movedId }.toMutableList()
-    result.add(index.coerceIn(0, result.size), movedId)
+    val index = if (beforeId == null) result.size else result.indexOf(beforeId).let { if (it < 0) result.size else it }
+    result.add(index, movedId)
     return result
 }

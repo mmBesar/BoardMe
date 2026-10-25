@@ -60,7 +60,14 @@ class CredentialStore(context: Context) {
             prefs.edit().putLong(KEY_PROJECT, value).apply()
         }
 
+    // Decrypting needs the Android Keystore, so the result is kept in memory
+    // (the screens ask for the connection often).
+    @Volatile private var cached: Connection? = null
+    @Volatile private var cacheLoaded = false
+
     fun saveConnection(connection: Connection) {
+        cached = connection
+        cacheLoaded = true
         prefs.edit()
             .putString(KEY_ENDPOINT, encrypt(connection.endpoint))
             .putString(KEY_USER, encrypt(connection.username))
@@ -71,6 +78,14 @@ class CredentialStore(context: Context) {
 
     /** Returns null if nothing is saved or it cannot be decrypted any more. */
     fun loadConnection(): Connection? {
+        if (cacheLoaded) return cached
+        val loaded = readConnection()
+        cached = loaded
+        cacheLoaded = true
+        return loaded
+    }
+
+    private fun readConnection(): Connection? {
         val endpoint = decrypt(prefs.getString(KEY_ENDPOINT, null)) ?: return null
         val user = decrypt(prefs.getString(KEY_USER, null)) ?: return null
         val token = decrypt(prefs.getString(KEY_TOKEN, null)) ?: return null
@@ -78,6 +93,8 @@ class CredentialStore(context: Context) {
     }
 
     fun clearConnection() {
+        cached = null
+        cacheLoaded = true
         prefs.edit()
             .remove(KEY_ENDPOINT).remove(KEY_USER).remove(KEY_TOKEN).remove(KEY_PIN)
             .apply()

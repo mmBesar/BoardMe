@@ -86,4 +86,7 @@ data class TaskDto(
     @Serializable(with = FlexibleLongSerializer::class) val dateDue: Long = 0,
     @SerialName("is_active")
     @Serializable(with = FlexibleLongSerializer::class) val isActive: Long = 1,
+    @SerialName("color_id")
+    @Serializable(with = FlexibleStringSerializer::class) val colorId: String = "",
+    @Serializable(with = FlexibleLongSerializer::class) val priority: Long = 0,
 )

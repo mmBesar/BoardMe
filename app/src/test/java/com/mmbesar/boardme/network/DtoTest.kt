@@ -24,6 +24,20 @@ class DtoTest {
     }
 
     @Test
+    fun colourAndPriorityAreRead() {
+        val task = json.decodeFromString(
+            TaskDto.serializer(),
+            """{"id":"1","title":"X","color_id":"red","priority":"2"}""",
+        )
+        assertEquals("red", task.colorId)
+        assertEquals(2L, task.priority)
+        // Missing or null values fall back to "no colour" and "no priority".
+        val plain = json.decodeFromString(TaskDto.serializer(), """{"id":"2","color_id":null}""")
+        assertEquals("", plain.colorId)
+        assertEquals(0L, plain.priority)
+    }
+
+    @Test
     fun realNumbersAreAcceptedToo() {
         val task = json.decodeFromString(
             TaskDto.serializer(),

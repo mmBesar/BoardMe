@@ -2,7 +2,19 @@
 
 package com.mmbesar.boardme.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FilterChip
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,6 +57,7 @@ fun CertificateDialog(
     state: ConnectState.ConfirmCertificate,
     onTrust: () -> Unit,
     onDismiss: () -> Unit,
+    changed: Boolean = false,
 ) {
     val info = state.info
     val dates = DateFormat.getDateInstance(DateFormat.MEDIUM)
@@ -56,6 +69,12 @@ fun CertificateDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (changed) {
+                    Text(
+                        stringResource(R.string.cert_changed_warning),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 Text(stringResource(R.string.cert_intro))
                 if (info.selfSigned) {
                     Text(
@@ -94,17 +113,19 @@ fun HttpWarningDialog(onContinue: () -> Unit, onDismiss: () -> Unit) {
     )
 }
 
-/** Create or edit a task: title, description and due date. */
+/** Create or edit a task: title, description, due date, colour and priority. */
 @Composable
 fun TaskDialog(
     initial: TaskEntity?,
     onDismiss: () -> Unit,
-    onSave: (title: String, description: String, dueDate: String?) -> Unit,
+    onSave: (title: String, description: String, dueDate: String?, colorId: String, priority: Int) -> Unit,
     onClose: (() -> Unit)?,
 ) {
     var title by rememberSaveable { mutableStateOf(initial?.title.orEmpty()) }
     var description by rememberSaveable { mutableStateOf(initial?.description.orEmpty()) }
     var dueDate by rememberSaveable { mutableStateOf(initial?.dueDate) }
+    var colorId by rememberSaveable { mutableStateOf(initial?.colorId.orEmpty()) }
+    var priority by rememberSaveable { mutableStateOf(initial?.priority ?: 0) }
     var showPicker by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -143,6 +164,43 @@ fun TaskDialog(
                         TextButton(onClick = { dueDate = null }) { Text(stringResource(R.string.action_clear)) }
                     }
                 }
+
+                // Colour: a row of circles; the first one means "default".
+                Text(stringResource(R.string.field_color), style = MaterialTheme.typography.labelLarge)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ColorDot(color = null, selected = colorId.isEmpty(), label = stringResource(R.string.color_default)) {
+                        colorId = ""
+                    }
+                    kanboardColors.forEach { (id, color) ->
+                        ColorDot(color = color, selected = colorId == id, label = id.replace('_', ' ')) {
+                            colorId = id
+                        }
+                    }
+                }
+
+                // Priority: none / low / medium / high.
+                Text(stringResource(R.string.field_priority), style = MaterialTheme.typography.labelLarge)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val labels = listOf(
+                        R.string.priority_none, R.string.priority_low,
+                        R.string.priority_medium, R.string.priority_high,
+                    )
+                    labels.forEachIndexed { level, label ->
+                        FilterChip(
+                            selected = priority == level,
+                            onClick = { priority = level },
+                            label = { Text(stringResource(label)) },
+                        )
+                    }
+                }
+
                 if (onClose != null) {
                     TextButton(onClick = onClose) { Text(stringResource(R.string.task_close)) }
                 }
@@ -150,7 +208,7 @@ fun TaskDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(title.trim(), description, dueDate) },
+                onClick = { onSave(title.trim(), description, dueDate, colorId, priority) },
                 enabled = title.isNotBlank(),
             ) { Text(stringResource(R.string.action_save)) }
         },
@@ -171,6 +229,29 @@ fun TaskDialog(
         ) {
             DatePicker(state = pickerState)
         }
+    }
+}
+
+/** One colour circle. [color] = null draws the "default" circle (empty with a dash). */
+@Composable
+private fun ColorDot(color: androidx.compose.ui.graphics.Color?, selected: Boolean, label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(color ?: androidx.compose.ui.graphics.Color.Transparent)
+            .border(
+                BorderStroke(
+                    if (selected) 3.dp else 1.dp,
+                    if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+                ),
+                CircleShape,
+            )
+            .semantics { contentDescription = label }
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (color == null) Text("–", color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -262,5 +343,35 @@ fun ConnectionDialog(summary: ConnectionSummary?, mode: Mode, onDismiss: () -> U
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_ok)) } },
+    )
+}
+
+/** Asks for a new personal access token (when the server stopped accepting the saved one). */
+@Composable
+fun TokenDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    // Not saved across rotation on purpose: a token should not sit in saved UI state.
+    var token by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.token_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.token_message))
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    label = { Text(stringResource(R.string.field_token)) },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(token.trim()) }, enabled = token.isNotBlank()) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }

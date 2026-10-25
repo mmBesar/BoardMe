@@ -1,5 +1,6 @@
 package com.mmbesar.boardme.data
 
+import kotlinx.serialization.Required
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -12,9 +13,11 @@ import kotlinx.serialization.json.Json
  */
 @Serializable
 data class BackupFile(
-    val format: String = FORMAT,
-    val version: Int = VERSION,
-    val projects: List<BackupProject> = emptyList(),
+    // @Required: a file without these keys (for example "{}") is NOT a backup,
+    // so it can never wipe the workspace by accident.
+    @Required val format: String = FORMAT,
+    @Required val version: Int = VERSION,
+    @Required val projects: List<BackupProject> = emptyList(),
 ) {
     companion object {
         const val FORMAT = "boardme-backup"
@@ -43,6 +46,10 @@ data class BackupTask(
     /** "YYYY-MM-DD" or null. */
     val dueDate: String? = null,
     val closed: Boolean = false,
+    /** Kanboard colour name, "" = default. */
+    val color: String = "",
+    /** 0 (none) to 3 (high). */
+    val priority: Int = 0,
 )
 
 /** Reads and writes backup files, and refuses files that look wrong. */
