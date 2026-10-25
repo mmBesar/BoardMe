@@ -5,7 +5,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-## [0.2.0] - not released yet
+## [0.3.0] - not released yet
+
+### Added
+- Markdown in task descriptions (headings, bold, italic, strike-through, code, code blocks, lists, checkboxes, quotes, links) with a Preview button in the task editor; cards show a clean short preview.
+- Right-to-left and mixed text: every title, description, field and search box follows the direction of its own text (Arabic/Hebrew mixed with English works).
+- Settings now has Account (server, user, security, Sync now, change password or token, edit server address or user, log out), Appearance, and About.
+- Option to hide descriptions on cards.
+
+### Changed
+- Login field is now "Password or personal access token" (both work).
+- Drag and drop: a short sideways move switches column, and the dragged card's centre (not the finger) decides where it lands.
+- "Connection" and "Switch mode" moved from the menu into Settings.
+
+## [0.2.0] - 2026-10-25
 
 ### Added
 - **Offline-first**: every change (create, edit, move, close, reopen, delete) is saved on the phone at once and sent to the server in the background, in order. If there is no connection it waits and is sent automatically when you are back online, even if the app was closed. A banner shows offline / waiting / problem status; cards waiting to sync are marked.
@@ -25,7 +38,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/).
 - Several problems found in the audit: certificate re-trust flow, token not saved after a failed test, race between sync and edits, strict column loading, cached credentials.
 - Home-screen widget: tapping it now opens the app (CI compile error with `actionStartActivity`).
 
-## [0.1.0] - not released yet
+## [0.1.0] - 2026-10-24
 
 ### Added
 - Connect to a Kanboard server with a username and personal access token.

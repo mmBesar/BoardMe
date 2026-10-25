@@ -65,6 +65,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -87,6 +88,9 @@ class DragState {
 
     /** How far below the card's top edge the finger touched it. */
     var grabY by mutableStateOf(0f)
+
+    /** Height of the dragged card in pixels. */
+    var cardHeight by mutableStateOf(0f)
 
     /** The column (page) the finger is over, and the task it would be dropped in front of (null = at the end). */
     var dropPage by mutableStateOf(-1)
@@ -133,6 +137,7 @@ internal fun BoardPager(
     tasks: List<TaskEntity>,
     pendingIds: Set<Long>,
     dragEnabled: Boolean,
+    showDescriptions: Boolean,
     pagerState: PagerState,
     refreshing: Boolean,
     onRefresh: () -> Unit,
@@ -163,8 +168,10 @@ internal fun BoardPager(
         val listState = listStates[page] ?: return
         val column = columnsNow.getOrNull(page) ?: return
         drag.dropPage = page
+        // The CARD's centre decides the spot (not the finger), so a short move is enough.
+        val cardCentre = drag.pointer.y - drag.grabY + drag.cardHeight / 2f
         drag.dropBefore = computeDropTarget(
-            drag.pointer.y, dragged.id, byColumnNow[column.id].orEmpty(), listState, pagerTop,
+            cardCentre, dragged.id, byColumnNow[column.id].orEmpty(), listState, pagerTop,
         )
     }
 
@@ -178,13 +185,16 @@ internal fun BoardPager(
         drag.reset()
     }
 
-    // While dragging: scroll the list near its top/bottom edge, switch column near the left/right
-    // edge, and keep the drop indicator up to date.
+    // While dragging: scroll the list near its top/bottom edge, keep the drop indicator up to date,
+    // and switch column after a SHORT sideways move (or when the finger reaches a screen edge).
     LaunchedEffect(drag.active) {
         if (!drag.active) return@LaunchedEffect
         val zone = with(density) { 72.dp.toPx() }
-        var edgeSide = 0
-        var edgeSince = 0L
+        val edge = with(density) { 40.dp.toPx() }
+        val sideMove = with(density) { 72.dp.toPx() }
+        // The sideways move is measured from where the drag started (or from the last switch).
+        var anchor = drag.pointer
+        var lastSwitch = 0L
         while (true) {
             val pointer = drag.pointer
             val page = pagerState.currentPage
@@ -196,19 +206,24 @@ internal fun BoardPager(
                     listState.scrollBy(20f)
                 }
             }
-            val side = when {
-                pointer.x < container.left + zone -> -1
-                pointer.x > container.right - zone -> 1
-                else -> 0
-            }
+            val dx = pointer.x - anchor.x
+            val dy = pointer.y - anchor.y
             val now = System.currentTimeMillis()
-            if (side != edgeSide) {
-                edgeSide = side
-                edgeSince = now
-            } else if (side != 0 && now - edgeSince > 450) {
+            var side = 0
+            if (kotlin.math.abs(dx) > sideMove && kotlin.math.abs(dx) > kotlin.math.abs(dy)) {
+                side = if (dx > 0) 1 else -1
+            } else if (pointer.x < container.left + edge && dx < 0) {
+                side = -1
+            } else if (pointer.x > container.right - edge && dx > 0) {
+                side = 1
+            }
+            if (side != 0 && now - lastSwitch > 350) {
                 val target = page + side
-                if (target in columnsNow.indices) pagerState.animateScrollToPage(target)
-                edgeSince = now
+                if (target in columnsNow.indices) {
+                    pagerState.animateScrollToPage(target)
+                    anchor = drag.pointer
+                    lastSwitch = System.currentTimeMillis()
+                }
             }
             updateDrop()
             delay(16)
@@ -268,6 +283,7 @@ internal fun BoardPager(
                                     drag.task = task
                                     drag.pointer = Offset(container.left + touch.x, pagerTop + touch.y)
                                     drag.grabY = touch.y - hit.offset
+                                    drag.cardHeight = hit.size.toFloat()
                                     drag.dropPage = page
                                     drag.dropBefore = task.id
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -313,6 +329,7 @@ internal fun BoardPager(
                                 TaskCard(
                                     task = task,
                                     pending = task.id in pendingIds,
+                                    showDescription = showDescriptions,
                                     dragging = drag.task?.id == task.id,
                                     canMoveLeft = page > 0,
                                     canMoveRight = page < columns.lastIndex,
@@ -363,10 +380,10 @@ internal fun BoardPager(
                 ) {
                     Text(
                         dragged.title,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
                     )
                 }
             }
@@ -391,6 +408,7 @@ private fun DropLine() {
 private fun TaskCard(
     task: TaskEntity,
     pending: Boolean,
+    showDescription: Boolean,
     dragging: Boolean,
     canMoveLeft: Boolean,
     canMoveRight: Boolean,
@@ -426,13 +444,20 @@ private fun TaskCard(
                 verticalAlignment = Alignment.Top,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(task.title, style = MaterialTheme.typography.titleMedium)
-                    if (task.description.isNotBlank()) {
+                    Text(
+                        task.title,
+                        style = MaterialTheme.typography.titleMedium.copy(textDirection = TextDirection.Content),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (showDescription && task.description.isNotBlank()) {
+                        val theme = MdTheme(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.surfaceVariant)
+                        val preview = remember(task.description, theme) { markdownPreview(task.description, theme) }
                         Text(
-                            task.description,
+                            preview,
+                            modifier = Modifier.fillMaxWidth(),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.copy(textDirection = TextDirection.Content),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }

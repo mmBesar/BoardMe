@@ -142,6 +142,20 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
     private val _connectState = MutableStateFlow<ConnectState>(ConnectState.Idle)
     val connectState: StateFlow<ConnectState> = _connectState.asStateFlow()
 
+    /** True while the setup screen is shown to EDIT the saved server address / user. */
+    private val _editingConnection = MutableStateFlow(false)
+    val editingConnection: StateFlow<Boolean> = _editingConnection.asStateFlow()
+
+    fun startEditConnection() {
+        _connectState.value = ConnectState.Idle
+        _editingConnection.value = true
+    }
+
+    fun cancelEditConnection() {
+        _connectState.value = ConnectState.Idle
+        _editingConnection.value = false
+    }
+
     private val _certReview = MutableStateFlow<ConnectState.ConfirmCertificate?>(null)
 
     /** Set while the user is asked whether to trust a renewed server certificate. */
@@ -229,6 +243,7 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
                 _selectedProjectId.value = 0L
                 _mode.value = Mode.KANBOARD
                 _connectState.value = ConnectState.Idle
+                _editingConnection.value = false
                 requestSync(full = true)
             } catch (e: CancellationException) {
                 throw e
@@ -263,6 +278,7 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
         repo.reset()
         _selectedProjectId.value = 0L
         _connectState.value = ConnectState.Idle
+        _editingConnection.value = false
         _mode.value = Mode.UNSET
     }
 

@@ -26,6 +26,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -53,12 +54,18 @@ import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mmbesar.boardme.R
+import com.mmbesar.boardme.security.Mode
 import com.mmbesar.boardme.widget.BoardWidget
 
-/** Appearance settings: theme, accent colour and AMOLED black. Changes apply instantly. */
+/** Settings: account (login, log out), appearance (applies instantly) and about. */
 @Composable
-fun SettingsScreen(themePrefs: ThemePrefs, onBack: () -> Unit) {
+fun SettingsScreen(themePrefs: ThemePrefs, viewModel: BoardViewModel, onBack: () -> Unit) {
     val settings by themePrefs.settings.collectAsStateWithLifecycle()
+    val mode by viewModel.mode.collectAsStateWithLifecycle()
+    val pendingCount by viewModel.pendingCount.collectAsStateWithLifecycle()
+    val summary = remember { viewModel.connectionSummary() }
+    var showToken by remember { mutableStateOf(false) }
+    var showLogout by remember { mutableStateOf(false) }
     val systemDark = isSystemInDarkTheme()
     val context = LocalContext.current
     var showCustom by remember { mutableStateOf(false) }
@@ -106,7 +113,44 @@ fun SettingsScreen(themePrefs: ThemePrefs, onBack: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            // ---- Theme ----
+            // ---- Account ----
+            SectionTitle(R.string.settings_account)
+            if (mode == Mode.LOCAL || summary == null) {
+                Text(stringResource(R.string.about_local))
+                OutlinedButton(onClick = { showLogout = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.settings_use_server))
+                }
+            } else {
+                Text(stringResource(R.string.about_server, summary.address))
+                Text(stringResource(R.string.about_user, summary.username))
+                when (summary.security) {
+                    Security.HTTPS -> Text(stringResource(R.string.about_security_https), style = MaterialTheme.typography.bodySmall)
+                    Security.HTTPS_PINNED -> Text(stringResource(R.string.about_security_pinned) + "\n" + summary.pinnedSha256.orEmpty(), style = MaterialTheme.typography.bodySmall)
+                    Security.HTTP -> Text(
+                        stringResource(R.string.about_security_http),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                if (pendingCount > 0) {
+                    Text(stringResource(R.string.banner_pending, pendingCount), color = MaterialTheme.colorScheme.primary)
+                }
+                OutlinedButton(onClick = { viewModel.syncNow() }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.settings_sync_now))
+                }
+                OutlinedButton(onClick = { showToken = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.settings_change_secret))
+                }
+                OutlinedButton(onClick = { viewModel.startEditConnection() }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.settings_edit_connection))
+                }
+                OutlinedButton(onClick = { showLogout = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.settings_log_out))
+                }
+            }
+
+            // ---- Appearance ----
+            SectionTitle(R.string.settings_appearance)
             Text(stringResource(R.string.settings_theme), style = MaterialTheme.typography.titleMedium)
             themes.forEach { (choice, title, description) ->
                 Row(
@@ -193,7 +237,68 @@ fun SettingsScreen(themePrefs: ThemePrefs, onBack: () -> Unit) {
                     onCheckedChange = { checked -> themePrefs.update { it.copy(amoled = checked) } },
                 )
             }
+
+            // ---- Card details ----
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_show_descriptions), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        stringResource(R.string.settings_show_descriptions_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = settings.showDescriptions,
+                    onCheckedChange = { checked -> themePrefs.update { it.copy(showDescriptions = checked) } },
+                )
+            }
+
+            // ---- About ----
+            SectionTitle(R.string.settings_about)
+            val version = remember {
+                runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }
+                    .getOrNull().orEmpty()
+            }
+            Text(stringResource(R.string.about_version, version), style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.about_license), style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.about_independent), style = MaterialTheme.typography.bodySmall)
         }
+    }
+
+    if (showToken) {
+        TokenDialog(
+            onDismiss = { showToken = false },
+            onConfirm = { token ->
+                viewModel.updateToken(token)
+                showToken = false
+            },
+        )
+    }
+
+    if (showLogout) {
+        val base = stringResource(
+            if (mode == Mode.LOCAL) R.string.switch_message_local else R.string.switch_message_server,
+        )
+        // Logging out erases the copy on the phone, so unsent changes would be lost: say so.
+        val message = if (pendingCount > 0) {
+            base + "\n\n" + stringResource(R.string.switch_pending_warning, pendingCount)
+        } else {
+            base
+        }
+        ConfirmDialog(
+            title = stringResource(R.string.logout_title),
+            message = message,
+            confirmLabel = stringResource(R.string.logout_confirm),
+            onDismiss = { showLogout = false },
+            onConfirm = {
+                showLogout = false
+                viewModel.resetMode()
+            },
+        )
     }
 
     if (showCustom) {
@@ -206,6 +311,17 @@ fun SettingsScreen(themePrefs: ThemePrefs, onBack: () -> Unit) {
             },
         )
     }
+}
+
+/** Heading that starts a settings section. */
+@Composable
+private fun SectionTitle(title: Int) {
+    Text(
+        stringResource(title),
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 16.dp),
+    )
 }
 
 /** A plain coloured circle. */

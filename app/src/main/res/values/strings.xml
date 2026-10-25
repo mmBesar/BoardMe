@@ -22,7 +22,7 @@
     <string name="field_address">Server address</string>
     <string name="field_address_hint">https://kanboard.example.com</string>
     <string name="field_username">Username</string>
-    <string name="field_token">Personal access token</string>
+    <string name="field_token">Password or personal access token</string>
 
     <!-- Plain HTTP warning -->
     <string name="http_title">Connection is not encrypted</string>
@@ -66,7 +66,10 @@
     <string name="task_move_up">Move up</string>
     <string name="task_move_down">Move down</string>
     <string name="field_title">Title</string>
-    <string name="field_description">Description</string>
+    <string name="field_description">Description (Markdown)</string>
+    <string name="action_preview">Preview</string>
+    <string name="action_edit_text">Edit text</string>
+    <string name="preview_empty">Nothing to preview yet.</string>
     <string name="due_on">Due: %s</string>
     <string name="no_due_date">No due date</string>
 
@@ -103,11 +106,11 @@
 
     <!-- Errors and messages -->
     <string name="error_bad_address">That does not look like a valid server address.</string>
-    <string name="error_missing_login">Enter your username and personal access token.</string>
+    <string name="error_missing_login">Enter your username and password (or personal access token).</string>
     <string name="error_network">Cannot reach the server. Check the address and your connection. Saved data is still shown.</string>
     <string name="error_certificate">The server certificate is not trusted.</string>
     <string name="error_certificate_changed">The server certificate is not the one you trusted. If it was renewed on purpose, switch mode and connect again to trust the new one.</string>
-    <string name="error_unauthorized">Wrong username or token.</string>
+    <string name="error_unauthorized">Wrong username, password or token.</string>
     <string name="error_forbidden">This account is not allowed to do that.</string>
     <string name="error_rejected">The server refused the change.</string>
     <string name="error_server">The server reported a problem: %s</string>
@@ -169,18 +172,36 @@
     <string name="banner_offline">Offline. Your changes are saved on this phone.</string>
     <string name="banner_offline_pending">Offline. %d change(s) will be sent when you are back online.</string>
     <string name="banner_pending">%d change(s) waiting to be sent to the server.</string>
-    <string name="banner_login">The server did not accept your token. Changes are kept safe.</string>
+    <string name="banner_login">The server did not accept your password or token. Changes are kept safe.</string>
     <string name="banner_certificate">The server certificate changed. Changes are kept safe.</string>
     <string name="banner_error">The server reported a problem. BoardMe will try again.</string>
-    <string name="action_update_token">Update token</string>
+    <string name="action_update_token">Change</string>
     <string name="action_review">Review</string>
     <string name="sync_dropped">%d change(s) were refused by the server and undone.</string>
     <string name="switch_pending_warning">Warning: %d change(s) have not reached the server yet and will be lost.</string>
     <string name="cert_changed_warning">This server\'s certificate is different from the one you trusted before. Only continue if you know why.</string>
-    <string name="token_title">Update token</string>
-    <string name="token_message">Paste a new personal access token for your Kanboard account.</string>
+    <string name="token_title">Change password or token</string>
+    <string name="token_message">Enter your new Kanboard password or personal access token.</string>
 
     <!-- Search -->
     <string name="search_hint">Search tasks</string>
     <string name="search_close">Close search</string>
+
+    <!-- Settings: account, sync, about -->
+    <string name="settings_account">Account</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_about">About</string>
+    <string name="settings_change_secret">Change password or token</string>
+    <string name="settings_edit_connection">Edit server address or user</string>
+    <string name="settings_sync_now">Sync now</string>
+    <string name="settings_log_out">Log out</string>
+    <string name="settings_use_server">Use a Kanboard server instead</string>
+    <string name="logout_title">Log out?</string>
+    <string name="logout_confirm">Erase and log out</string>
+    <string name="settings_show_descriptions">Show descriptions on cards</string>
+    <string name="settings_show_descriptions_desc">Turn off for shorter, more compact cards</string>
+    <string name="about_version">BoardMe %s</string>
+    <string name="about_license">Free software under the GNU GPL v3. Source: github.com/mmBesar/BoardMe</string>
+    <string name="setup_edit_title">Edit connection</string>
+    <string name="setup_edit_warning">Saving connects again and replaces the copy of your boards on this phone. Changes that have not reached the server yet will be lost.</string>
 </resources>

@@ -39,9 +39,13 @@ import com.mmbesar.boardme.network.ServerAddress
 @Composable
 fun SetupScreen(viewModel: BoardViewModel) {
     val state by viewModel.connectState.collectAsStateWithLifecycle()
+    val editing by viewModel.editingConnection.collectAsStateWithLifecycle()
+    val pendingCount by viewModel.pendingCount.collectAsStateWithLifecycle()
 
-    var address by rememberSaveable { mutableStateOf("") }
-    var username by rememberSaveable { mutableStateOf("") }
+    // When editing, the saved address and user are filled in (the password is never shown).
+    val saved = remember(editing) { if (editing) viewModel.connectionSummary() else null }
+    var address by rememberSaveable { mutableStateOf(saved?.address.orEmpty()) }
+    var username by rememberSaveable { mutableStateOf(saved?.username.orEmpty()) }
     var token by remember { mutableStateOf("") }
     var showHttpWarning by remember { mutableStateOf(false) }
 
@@ -56,8 +60,16 @@ fun SetupScreen(viewModel: BoardViewModel) {
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(stringResource(R.string.setup_title), style = MaterialTheme.typography.headlineMedium)
-        Text(stringResource(R.string.setup_intro))
+        if (editing) {
+            Text(stringResource(R.string.setup_edit_title), style = MaterialTheme.typography.headlineMedium)
+            Text(stringResource(R.string.setup_edit_warning), color = MaterialTheme.colorScheme.error)
+            if (pendingCount > 0) {
+                Text(stringResource(R.string.switch_pending_warning, pendingCount), color = MaterialTheme.colorScheme.error)
+            }
+        } else {
+            Text(stringResource(R.string.setup_title), style = MaterialTheme.typography.headlineMedium)
+            Text(stringResource(R.string.setup_intro))
+        }
 
         OutlinedTextField(
             value = address,
@@ -108,12 +120,20 @@ fun SetupScreen(viewModel: BoardViewModel) {
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-        Text(stringResource(R.string.setup_local_intro))
-        OutlinedButton(
-            onClick = { viewModel.startLocal() },
-            enabled = !working,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(stringResource(R.string.action_use_locally)) }
+        if (editing) {
+            OutlinedButton(
+                onClick = { viewModel.cancelEditConnection() },
+                enabled = !working,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(stringResource(R.string.action_cancel)) }
+        } else {
+            Text(stringResource(R.string.setup_local_intro))
+            OutlinedButton(
+                onClick = { viewModel.startLocal() },
+                enabled = !working,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(stringResource(R.string.action_use_locally)) }
+        }
     }
 
     if (showHttpWarning) {

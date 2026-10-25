@@ -64,8 +64,6 @@ private sealed interface BoardDialog {
     data class EditTask(val task: TaskEntity) : BoardDialog
     data object NewProject : BoardDialog
     data object ConfirmArchive : BoardDialog
-    data object ConfirmSwitch : BoardDialog
-    data object ShowConnection : BoardDialog
     data object UpdateToken : BoardDialog
     data class ConfirmImport(val uri: Uri) : BoardDialog
 }
@@ -85,6 +83,7 @@ fun BoardScreen(viewModel: BoardViewModel, themePrefs: ThemePrefs) {
     val pendingIds by viewModel.pendingTaskIds.collectAsStateWithLifecycle()
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
     val certReview by viewModel.certReview.collectAsStateWithLifecycle()
+    val look by themePrefs.settings.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) { viewModel.events.collect { snackbar.showSnackbar(it) } }
@@ -115,7 +114,7 @@ fun BoardScreen(viewModel: BoardViewModel, themePrefs: ThemePrefs) {
     }
 
     if (showSettings) {
-        SettingsScreen(themePrefs = themePrefs, onBack = { showSettings = false })
+        SettingsScreen(themePrefs = themePrefs, viewModel = viewModel, onBack = { showSettings = false })
         return
     }
     if (showClosed) {
@@ -142,6 +141,9 @@ fun BoardScreen(viewModel: BoardViewModel, themePrefs: ThemePrefs) {
                             value = query,
                             onValueChange = { query = it },
                             singleLine = true,
+                            textStyle = androidx.compose.material3.LocalTextStyle.current.copy(
+                                textDirection = androidx.compose.ui.text.style.TextDirection.Content,
+                            ),
                             placeholder = { Text(stringResource(R.string.search_hint)) },
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -247,14 +249,6 @@ fun BoardScreen(viewModel: BoardViewModel, themePrefs: ThemePrefs) {
                                     text = { Text(stringResource(R.string.menu_settings)) },
                                     onClick = { menuOpen = false; showSettings = true },
                                 )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.menu_connection)) },
-                                    onClick = { menuOpen = false; dialog = BoardDialog.ShowConnection },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.menu_switch_mode)) },
-                                    onClick = { menuOpen = false; dialog = BoardDialog.ConfirmSwitch },
-                                )
                             }
                         }
                     }
@@ -297,6 +291,7 @@ fun BoardScreen(viewModel: BoardViewModel, themePrefs: ThemePrefs) {
                     pendingIds = pendingIds,
                     // Dragging a card in a filtered list would drop it at a misleading place.
                     dragEnabled = needle.isEmpty(),
+                    showDescriptions = look.showDescriptions,
                     pagerState = pagerState,
                     refreshing = refreshing,
                     onRefresh = { viewModel.refreshCurrent() },
@@ -367,34 +362,6 @@ fun BoardScreen(viewModel: BoardViewModel, themePrefs: ThemePrefs) {
                 viewModel.archiveCurrentProject()
                 dialog = null
             },
-        )
-
-        BoardDialog.ConfirmSwitch -> {
-            val base = stringResource(
-                if (mode == Mode.LOCAL) R.string.switch_message_local else R.string.switch_message_server,
-            )
-            // Switching deletes the on-phone copy, so changes not yet sent would be lost: say so.
-            val message = if (pendingCount > 0) {
-                base + "\n\n" + stringResource(R.string.switch_pending_warning, pendingCount)
-            } else {
-                base
-            }
-            ConfirmDialog(
-                title = stringResource(R.string.switch_title),
-                message = message,
-                confirmLabel = stringResource(R.string.switch_confirm),
-                onDismiss = { dialog = null },
-                onConfirm = {
-                    viewModel.resetMode()
-                    dialog = null
-                },
-            )
-        }
-
-        BoardDialog.ShowConnection -> ConnectionDialog(
-            summary = viewModel.connectionSummary(),
-            mode = mode,
-            onDismiss = { dialog = null },
         )
 
         BoardDialog.UpdateToken -> TokenDialog(

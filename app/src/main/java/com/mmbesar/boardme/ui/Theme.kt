@@ -53,6 +53,8 @@ data class ThemeSettings(
     val customAccent: Int = 0xFF8839EF.toInt(),
     /** Pure black backgrounds in dark themes (saves battery on OLED screens). */
     val amoled: Boolean = false,
+    /** Show the description text on task cards. */
+    val showDescriptions: Boolean = true,
 )
 
 // ---- The Catppuccin palettes (https://catppuccin.com/palette) ----------------------------------------

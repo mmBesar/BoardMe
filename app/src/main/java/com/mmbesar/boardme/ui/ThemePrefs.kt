@@ -23,6 +23,7 @@ class ThemePrefs(context: Context) {
             .putString(KEY_ACCENT, updated.accent)
             .putInt(KEY_CUSTOM, updated.customAccent)
             .putBoolean(KEY_AMOLED, updated.amoled)
+            .putBoolean(KEY_DESCRIPTIONS, updated.showDescriptions)
             .apply()
     }
 
@@ -32,6 +33,7 @@ class ThemePrefs(context: Context) {
         private const val KEY_ACCENT = "accent"
         private const val KEY_CUSTOM = "custom_accent"
         private const val KEY_AMOLED = "amoled"
+        private const val KEY_DESCRIPTIONS = "show_descriptions"
 
         private fun read(prefs: SharedPreferences): ThemeSettings {
             val defaults = ThemeSettings()
@@ -41,6 +43,7 @@ class ThemePrefs(context: Context) {
                 accent = prefs.getString(KEY_ACCENT, defaults.accent) ?: defaults.accent,
                 customAccent = prefs.getInt(KEY_CUSTOM, defaults.customAccent),
                 amoled = prefs.getBoolean(KEY_AMOLED, defaults.amoled),
+                showDescriptions = prefs.getBoolean(KEY_DESCRIPTIONS, defaults.showDescriptions),
             )
         }
 

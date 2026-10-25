@@ -27,6 +27,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import com.mmbesar.boardme.R
 import com.mmbesar.boardme.data.DueDates
@@ -127,6 +129,9 @@ fun TaskDialog(
     var colorId by rememberSaveable { mutableStateOf(initial?.colorId.orEmpty()) }
     var priority by rememberSaveable { mutableStateOf(initial?.priority ?: 0) }
     var showPicker by remember { mutableStateOf(false) }
+    var preview by rememberSaveable { mutableStateOf(false) }
+    // Each field follows the direction of what is typed in it (Arabic right to left, English left to right).
+    val fieldStyle = LocalTextStyle.current.copy(textDirection = TextDirection.Content)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -142,17 +147,32 @@ fun TaskDialog(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text(stringResource(R.string.field_title)) },
+                    textStyle = fieldStyle,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text(stringResource(R.string.field_description)) },
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                    minLines = 3,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (preview) {
+                    // The description as it will look (Markdown rendered).
+                    Text(stringResource(R.string.field_description), style = MaterialTheme.typography.labelLarge)
+                    if (description.isBlank()) {
+                        Text(stringResource(R.string.preview_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        MarkdownText(description, modifier = Modifier.fillMaxWidth())
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        label = { Text(stringResource(R.string.field_description)) },
+                        textStyle = fieldStyle,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                        minLines = 3,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                TextButton(onClick = { preview = !preview }) {
+                    Text(stringResource(if (preview) R.string.action_edit_text else R.string.action_preview))
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = dueDate?.let { stringResource(R.string.due_on, it) }

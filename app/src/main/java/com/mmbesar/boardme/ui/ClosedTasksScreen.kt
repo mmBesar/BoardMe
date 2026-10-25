@@ -81,7 +81,12 @@ fun ClosedTasksScreen(
                         ),
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            Text(task.title, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                task.title,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    textDirection = androidx.compose.ui.text.style.TextDirection.Content,
+                                ),
+                            )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.End,

@@ -40,7 +40,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun BoardMeRoot(themePrefs: ThemePrefs, viewModel: BoardViewModel = viewModel()) {
     val mode by viewModel.mode.collectAsStateWithLifecycle()
-    if (mode == Mode.UNSET) {
+    val editing by viewModel.editingConnection.collectAsStateWithLifecycle()
+    // The setup screen is also used to edit the saved server address / user.
+    if (mode == Mode.UNSET || editing) {
         SetupScreen(viewModel)
     } else {
         BoardScreen(viewModel, themePrefs)
